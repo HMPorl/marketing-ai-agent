@@ -224,7 +224,7 @@ class ProductDescriptionGenerator:
     def _generate_hireman_description(self, product: Dict, description_patterns: Dict, 
                                     key_features_patterns: Dict, manufacturer_info: Dict, 
                                     web_research: Dict) -> str:
-        """Generate The Hireman style description matching senior manager writing style"""
+        """Generate The Hireman style description matching your established format"""
         
         # Extract product details
         brand = product.get('brand', '')
@@ -234,14 +234,18 @@ class ProductDescriptionGenerator:
         power_type = product.get('power_type', '')
         existing_desc = product.get('description', '')
         
-        # Build description following The Hireman pattern
+        # Build description following your established pattern:
+        # 1. Brief introductory sentences at the top
+        # 2. Key Features section below
+        # 3. Space for manual NB notifications (added by you later)
+        
         description_parts = []
         
-        # 1. OPENING PARAGRAPH - What it is
-        opening = self._generate_factual_opening(brand, model, title, category, power_type, existing_desc)
+        # 1. OPENING SENTENCES - Brief intro (1-2 sentences)
+        opening = self._generate_brief_intro(brand, model, title, category, power_type, existing_desc)
         description_parts.append(opening)
         
-        # 2. KEY FEATURES - Structured list
+        # 2. KEY FEATURES - Following your established format
         key_features = self._extract_genuine_features(product, manufacturer_info, web_research)
         if key_features:
             description_parts.append("\n\n<strong>Key features:</strong>")
@@ -250,14 +254,63 @@ class ProductDescriptionGenerator:
                 description_parts.append(f"\n\t<li>{feature}</li>")
             description_parts.append("\n</ul>")
         
-        # 3. APPLICATIONS - Where it's used and why (without marketing fluff)
-        applications = self._generate_practical_applications(category, product, power_type)
-        if applications:
-            description_parts.append(f"\n\n{applications}")
+        # 3. Leave space for your manual NB notifications
+        # (You'll add these manually as needed)
         
         return ''.join(description_parts)
     
-    def _generate_factual_opening(self, brand: str, model: str, title: str, category: str, 
+    def _generate_brief_intro(self, brand: str, model: str, title: str, category: str, 
+                            power_type: str, existing_desc: str) -> str:
+        """Generate a brief 1-2 sentence introduction following your established format"""
+        
+        # Try to extract a good brief intro from existing description
+        if existing_desc and len(existing_desc) > 50:
+            # Look for the first meaningful sentence
+            sentences = existing_desc.split('.')
+            for sentence in sentences:
+                clean_sentence = sentence.strip()
+                # Skip HTML and find a good descriptive sentence
+                if (len(clean_sentence) > 20 and len(clean_sentence) < 150 and
+                    not clean_sentence.startswith('<') and 
+                    not 'hire' in clean_sentence.lower() and
+                    not 'london' in clean_sentence.lower()):
+                    return clean_sentence + '.'
+        
+        # Generate new brief intro
+        if brand and model:
+            intro = f"The {brand} {model}"
+        elif title:
+            # Use title but clean it up
+            clean_title = title.replace(' Hire', '').replace(' - London', '')
+            intro = f"The {clean_title}"
+        else:
+            intro = f"This {category.lower()}"
+        
+        # Add brief description
+        if power_type:
+            intro += f" is a {power_type.lower()} {category.lower()}"
+        else:
+            intro += f" is a professional {category.lower()}"
+        
+        # Add simple purpose
+        purposes = {
+            'Access Equipment': 'for safe working at height',
+            'Breaking & Drilling': 'for drilling and breaking applications', 
+            'Garden Equipment': 'for garden maintenance',
+            'Generators': 'providing reliable power supply',
+            'Air Compressors & Tools': 'for pneumatic applications',
+            'Cleaning Equipment': 'for effective cleaning',
+            'Site Equipment': 'for construction work',
+            'Heating': 'for heating applications',
+            'Pumps': 'for water management'
+        }
+        
+        purpose = purposes.get(category, 'for professional applications')
+        intro += f" {purpose}."
+        
+        return intro
+
+    def _generate_factual_opening(self, brand: str, model: str, title: str, category: str,
                                 power_type: str, existing_desc: str) -> str:
         """Generate a factual, professional opening paragraph"""
         
@@ -765,21 +818,26 @@ class ProductDescriptionGenerator:
             return f"Professional {category.lower()} hire from The Hireman London. Same-day delivery, expert advice, and competitive rates for your project needs."
     
     def _generate_wordpress_title(self, product: Dict, style_patterns: Dict) -> str:
-        """Generate WordPress-optimized title"""
+        """Generate clean WordPress title without SEO fluff"""
         
         title = product.get('title', '')
         if title:
-            # Enhance existing title with hire context
-            return f"{title} - Professional Hire London"
+            # Use the title as-is, removing only obvious hire/location fluff
+            clean_title = title.replace(' - Professional Hire London', '')
+            clean_title = clean_title.replace(' Hire', '')
+            clean_title = clean_title.replace(' - London', '')
+            return clean_title.strip()
         else:
             brand = product.get('brand', '')
             model = product.get('model', '')
             category = product.get('category', '')
             
             if brand and model:
-                return f"{brand} {model} {category} - Professional Hire London"
+                return f"{brand} {model}"
+            elif brand:
+                return f"{brand} {category}"
             else:
-                return f"Professional {category} Hire - The Hireman London"
+                return category
     
     def _extract_key_features_list(self, product: Dict, similar_products: List[Dict], 
                                  manufacturer_info: Dict) -> List[str]:
