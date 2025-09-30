@@ -1,9 +1,12 @@
 import json
 import re
 import random
+import requests
+from bs4 import BeautifulSoup
 from typing import Dict, List, Optional
 from datetime import datetime
 import logging
+import time
 
 class ProductDescriptionGenerator:
     def __init__(self, excel_handler=None):
@@ -11,45 +14,682 @@ class ProductDescriptionGenerator:
         self.style_patterns = {}
         self.similar_products = []
         
-    def generate_product_content(self, product_code: str, basic_info: Dict = None) -> Dict:
+    def generate_product_content(self, product_code: str) -> Dict:
         """
-        Generate complete product content (title, description, technical specs)
-        based on product code and optional basic information
+        Generate comprehensive WordPress-ready product content with web research
         """
         
-        print(f"Generating content for product code: {product_code}")
+        print(f"Generating comprehensive content for product code: {product_code}")
         
-        # Analyze product code
-        code_analysis = self.excel_handler.analyze_product_code(product_code) if self.excel_handler else self._mock_code_analysis(product_code)
+        # Get the specific product from CSV
+        product = self.excel_handler.get_product_by_code(product_code) if self.excel_handler else None
         
-        # Find similar products for style analysis
-        similar_products = self._get_similar_products(code_analysis['category'])
+        if not product or not product['found']:
+            category_info = self.excel_handler.analyze_product_code(product_code) if self.excel_handler else self._mock_code_analysis(product_code)
+            return self._generate_fallback_content(product_code, category_info)
         
-        # Analyze style patterns
-        style_patterns = self._analyze_style_patterns(similar_products)
+        print(f"Found product: {product['title']}")
         
-        # Get manufacturer information if available
+        # 1. Analyze similar products for style consistency
+        print("Analyzing similar products for style consistency...")
+        similar_products = self.excel_handler.get_products_by_category(product['category'], limit=15) if self.excel_handler else []
+        style_patterns = self.excel_handler.analyze_style_patterns(similar_products) if self.excel_handler else {}
+        
+        # 2. Research manufacturer website for factual information
+        print("Researching manufacturer website...")
         manufacturer_info = {}
-        if basic_info and basic_info.get('manufacturer_website'):
-            manufacturer_info = self._get_manufacturer_info(
-                basic_info.get('manufacturer_website'), 
-                basic_info.get('name', '')
-            )
+        if product.get('manufacturer_website'):
+            manufacturer_info = self.excel_handler.scrape_manufacturer_info(
+                product['manufacturer_website'], 
+                product['title']
+            ) if self.excel_handler else {}
         
-        # Generate content components
-        generated_content = {
+        # 3. Web search for additional product information
+        print("Searching web for additional product information...")
+        web_research = self._search_web_for_product(product)
+        
+        # 4. Generate WordPress-ready content
+        print("Generating WordPress-ready content...")
+        wordpress_content = self._generate_wordpress_content(
+            product, similar_products, manufacturer_info, web_research, style_patterns
+        )
+        
+        return {
             'product_code': product_code,
-            'category': code_analysis['category'],
+            'category': product['category'],
             'generated_at': datetime.now().isoformat(),
-            'title': self._generate_title(code_analysis, basic_info, style_patterns),
-            'description': self._generate_description(code_analysis, basic_info, style_patterns, manufacturer_info),
-            'technical_specs': self._generate_technical_specs(code_analysis, basic_info, style_patterns),
-            'manufacturer_info': manufacturer_info,
-            'manufacturer_website': basic_info.get('manufacturer_website', '') if basic_info else '',
-            'style_confidence': self._calculate_confidence(similar_products, style_patterns)
+            'wordpress_content': wordpress_content,
+            'research_sources': {
+                'similar_products_analyzed': len(similar_products),
+                'manufacturer_website': product.get('manufacturer_website', ''),
+                'web_research_completed': len(web_research.get('sources', [])),
+                'style_patterns_found': len(style_patterns.get('title_patterns', {}))
+            },
+            'style_confidence': self._calculate_style_confidence(style_patterns, similar_products)
+        }
+    
+    def _search_web_for_product(self, product: Dict) -> Dict:
+        """Search the web for additional product information"""
+        
+        search_terms = [
+            f"{product['brand']} {product['model']}",
+            f"{product['title']} specifications",
+            f"{product['brand']} {product['model']} review"
+        ]
+        
+        web_info = {
+            'sources': [],
+            'additional_features': [],
+            'common_uses': [],
+            'technical_details': {}
         }
         
-        return generated_content
+        try:
+            for search_term in search_terms[:2]:  # Limit to 2 searches to be respectful
+                if not search_term.strip():
+                    continue
+                    
+                print(f"Searching for: {search_term}")
+                
+                # Simple Google search simulation (in practice, you'd use a proper search API)
+                search_url = f"https://www.google.com/search?q={search_term.replace(' ', '+')}"
+                
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+                
+                try:
+                    response = requests.get(search_url, headers=headers, timeout=10)
+                    if response.status_code == 200:
+                        soup = BeautifulSoup(response.content, 'html.parser')
+                        
+                        # Extract snippets and links (basic implementation)
+                        results = soup.find_all('div', class_='BNeawe')
+                        for result in results[:3]:  # Top 3 results
+                            text = result.get_text()
+                            if len(text) > 50 and product['brand'].lower() in text.lower():
+                                web_info['sources'].append({
+                                    'search_term': search_term,
+                                    'snippet': text[:200] + "..." if len(text) > 200 else text
+                                })
+                        
+                        time.sleep(2)  # Be respectful to search engines
+                    
+                except Exception as e:
+                    logging.warning(f"Web search failed for {search_term}: {e}")
+                    continue
+                    
+        except Exception as e:
+            logging.error(f"Web research failed: {e}")
+        
+        return web_info
+    
+    def _generate_wordpress_content(self, product: Dict, similar_products: List[Dict], 
+                                   manufacturer_info: Dict, web_research: Dict, 
+                                   style_patterns: Dict) -> Dict:
+        """Generate WordPress-ready content with description and HTML technical specs"""
+        
+        # Analyze style patterns from similar products
+        description_patterns = self._analyze_description_patterns(similar_products)
+        key_features_patterns = self._analyze_key_features_patterns(similar_products)
+        
+        # Generate description with key features
+        description_with_features = self._generate_hireman_description(
+            product, description_patterns, key_features_patterns, 
+            manufacturer_info, web_research
+        )
+        
+        # Generate HTML technical specifications table
+        html_tech_specs = self._generate_html_technical_specs(
+            product, similar_products, manufacturer_info
+        )
+        
+        return {
+            'description_and_features': description_with_features,
+            'technical_specifications_html': html_tech_specs,
+            'meta_description': self._generate_meta_description(product),
+            'suggested_title': self._generate_wordpress_title(product, style_patterns),
+            'key_features_list': self._extract_key_features_list(product, similar_products, manufacturer_info)
+        }
+    
+    def _analyze_description_patterns(self, products: List[Dict]) -> Dict:
+        """Analyze description patterns from similar products"""
+        
+        patterns = {
+            'opening_phrases': [],
+            'key_feature_indicators': [],
+            'call_to_action_phrases': [],
+            'average_length': 0,
+            'common_terminology': []
+        }
+        
+        if not products:
+            return patterns
+        
+        descriptions = [p.get('description', '') for p in products if p.get('description')]
+        
+        # Filter out NaN and empty descriptions
+        valid_descriptions = []
+        for desc in descriptions:
+            if desc and isinstance(desc, str) and len(desc.strip()) > 10:
+                valid_descriptions.append(desc.strip())
+        
+        if not valid_descriptions:
+            return patterns
+        
+        # Analyze opening phrases
+        opening_phrases = []
+        for desc in valid_descriptions:
+            first_sentence = desc.split('.')[0]
+            if len(first_sentence) > 10:
+                opening_phrases.append(first_sentence[:50])
+        
+        patterns['opening_phrases'] = opening_phrases[:5]
+        patterns['average_length'] = sum(len(d.split()) for d in valid_descriptions) // len(valid_descriptions)
+        
+        return patterns
+    
+    def _analyze_key_features_patterns(self, products: List[Dict]) -> Dict:
+        """Analyze key features patterns from similar products"""
+        
+        patterns = {
+            'common_features': [],
+            'feature_presentation_style': 'bullet_points',
+            'technical_focus_areas': []
+        }
+        
+        # Look for features in descriptions
+        feature_keywords = [
+            'features', 'includes', 'benefits', 'specifications', 'ideal for',
+            'suitable for', 'designed for', 'perfect for', 'applications'
+        ]
+        
+        for product in products:
+            description = product.get('description', '')
+            # Handle NaN/float values
+            if not description or not isinstance(description, str):
+                continue
+                
+            description_lower = description.lower()
+            for keyword in feature_keywords:
+                if keyword in description_lower:
+                    # Extract text around the keyword
+                    start_idx = description_lower.find(keyword)
+                    if start_idx != -1:
+                        snippet = description_lower[start_idx:start_idx+100]
+                        patterns['common_features'].append(snippet)
+        
+        return patterns
+    
+    def _generate_hireman_description(self, product: Dict, description_patterns: Dict, 
+                                    key_features_patterns: Dict, manufacturer_info: Dict, 
+                                    web_research: Dict) -> str:
+        """Generate The Hireman style description with key features"""
+        
+        # Extract product details
+        brand = product.get('brand', '')
+        model = product.get('model', '')
+        title = product.get('title', '')
+        category = product.get('category', '')
+        power_type = product.get('power_type', '')
+        
+        # Build description
+        description_parts = []
+        
+        # Opening paragraph - product introduction
+        opening = f"The {brand} {model} is a " if brand and model else f"This {category.lower()} is a "
+        
+        # Add power type and category context
+        if power_type:
+            opening += f"professional {power_type.lower()} {category.lower()}"
+        else:
+            opening += f"professional {category.lower()}"
+        
+        # Add primary use case based on category
+        use_cases = self._get_category_use_cases(category)
+        if use_cases:
+            opening += f", ideal for {use_cases[0]}"
+        
+        # Add key selling point from existing description or research
+        existing_desc = product.get('description', '')
+        if existing_desc and len(existing_desc) > 50:
+            # Extract key selling point from first sentence
+            first_sentence = existing_desc.split('.')[0]
+            if 'ideal' in first_sentence.lower() or 'perfect' in first_sentence.lower():
+                opening += f". {first_sentence}"
+            else:
+                opening += f". It offers exceptional performance and reliability for professional use."
+        else:
+            opening += f". It offers exceptional performance and reliability for professional use."
+        
+        description_parts.append(opening)
+        
+        # Key features section
+        key_features = self._extract_and_enhance_key_features(
+            product, manufacturer_info, web_research
+        )
+        
+        if key_features:
+            description_parts.append("\n\n<strong>Key features:</strong>")
+            description_parts.append("<ul>")
+            for feature in key_features[:6]:  # Limit to 6 key features
+                description_parts.append(f" \t<li>{feature}</li>")
+            description_parts.append("</ul>")
+        
+        # Applications and use cases
+        applications = self._get_detailed_applications(category, product)
+        if applications:
+            description_parts.append(f"\n\nIdeal for {', '.join(applications[:4])}.")
+        
+        # Call to action - The Hireman style
+        cta = self._generate_hireman_cta(category)
+        description_parts.append(f"\n\n{cta}")
+        
+        return ''.join(description_parts)
+    
+    def _extract_and_enhance_key_features(self, product: Dict, manufacturer_info: Dict, 
+                                        web_research: Dict) -> List[str]:
+        """Extract and enhance key features from multiple sources"""
+        
+        features = []
+        
+        # Extract from existing description
+        existing_desc = product.get('description', '')
+        if '<li>' in existing_desc:
+            # Extract existing list items
+            soup = BeautifulSoup(existing_desc, 'html.parser')
+            li_items = soup.find_all('li')
+            for item in li_items:
+                feature_text = item.get_text().strip()
+                if feature_text and len(feature_text) > 5:
+                    features.append(feature_text)
+        
+        # Extract from technical specifications
+        tech_specs = product.get('technical_specs', {})
+        if isinstance(tech_specs, dict):
+            for key, value in tech_specs.items():
+                if key.lower() in ['power', 'motor', 'engine', 'capacity', 'weight']:
+                    features.append(f"{key}: {value}")
+        
+        # Add category-specific features
+        category_features = self._get_category_specific_features(
+            product.get('category', ''), product
+        )
+        features.extend(category_features)
+        
+        # Add manufacturer research features
+        if manufacturer_info.get('features'):
+            features.extend(manufacturer_info['features'][:3])
+        
+        # Remove duplicates and clean up
+        unique_features = []
+        seen = set()
+        for feature in features:
+            feature_clean = feature.lower().strip()
+            if feature_clean not in seen and len(feature) > 10:
+                unique_features.append(feature)
+                seen.add(feature_clean)
+        
+        return unique_features[:8]  # Maximum 8 features
+    
+    def _generate_html_technical_specs(self, product: Dict, similar_products: List[Dict], 
+                                     manufacturer_info: Dict) -> str:
+        """Generate HTML table for technical specifications"""
+        
+        # Get technical specifications from product
+        tech_specs = product.get('technical_specs', {})
+        
+        # If we have raw HTML specs, use and enhance them
+        if 'Technical Specs Raw' in tech_specs and '<table' in str(tech_specs['Technical Specs Raw']):
+            raw_html = tech_specs['Technical Specs Raw']
+            # Clean and enhance the existing HTML
+            return self._enhance_existing_html_table(raw_html)
+        
+        # Otherwise, build new HTML table
+        specs_data = self._compile_technical_specifications(
+            product, similar_products, manufacturer_info
+        )
+        
+        if not specs_data:
+            return "<p>Technical specifications will be updated soon.</p>"
+        
+        # Build HTML table
+        html = ['<table class="technical-specifications" style="width: 100%; border-collapse: collapse;">']
+        html.append('<thead>')
+        html.append('<tr style="background-color: #f8f9fa;">')
+        html.append('<th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Specification</th>')
+        html.append('<th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Details</th>')
+        html.append('</tr>')
+        html.append('</thead>')
+        html.append('<tbody>')
+        
+        for spec_name, spec_value in specs_data.items():
+            html.append('<tr>')
+            html.append(f'<td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">{spec_name}</td>')
+            html.append(f'<td style="padding: 8px; border: 1px solid #ddd;">{spec_value}</td>')
+            html.append('</tr>')
+        
+        html.append('</tbody>')
+        html.append('</table>')
+        
+        return '\n'.join(html)
+    
+    def _enhance_existing_html_table(self, raw_html: str) -> str:
+        """Enhance existing HTML table with better styling"""
+        
+        try:
+            soup = BeautifulSoup(raw_html, 'html.parser')
+            table = soup.find('table')
+            
+            if table:
+                # Add CSS classes and styling
+                table['class'] = 'technical-specifications'
+                table['style'] = 'width: 100%; border-collapse: collapse; margin: 20px 0;'
+                
+                # Style header row
+                header_row = table.find('tr')
+                if header_row:
+                    header_row['style'] = 'background-color: #f8f9fa;'
+                    for th in header_row.find_all(['th', 'td']):
+                        th['style'] = 'padding: 12px; border: 1px solid #ddd; font-weight: bold; text-align: center;'
+                
+                # Style data rows
+                data_rows = table.find_all('tr')[1:]  # Skip header
+                for row in data_rows:
+                    for td in row.find_all('td'):
+                        td['style'] = 'padding: 10px; border: 1px solid #ddd; text-align: center;'
+                
+                return str(table)
+            else:
+                return raw_html
+                
+        except Exception as e:
+            logging.error(f"Error enhancing HTML table: {e}")
+            return raw_html
+    
+    def _compile_technical_specifications(self, product: Dict, similar_products: List[Dict], 
+                                        manufacturer_info: Dict) -> Dict:
+        """Compile comprehensive technical specifications"""
+        
+        specs = {}
+        
+        # Extract from product data
+        tech_specs = product.get('technical_specs', {})
+        if isinstance(tech_specs, dict):
+            for key, value in tech_specs.items():
+                if key not in ['Technical Specs Raw', 'Meta: _Technical Specification']:
+                    clean_key = key.replace('_', ' ').title()
+                    specs[clean_key] = str(value)
+        
+        # Add essential specifications based on category
+        category = product.get('category', '')
+        essential_specs = self._get_category_essential_specs(category, product)
+        specs.update(essential_specs)
+        
+        # Add manufacturer specifications
+        if manufacturer_info.get('specifications'):
+            specs.update(manufacturer_info['specifications'])
+        
+        # Clean up and format
+        cleaned_specs = {}
+        for key, value in specs.items():
+            if value and str(value).strip() and str(value) != 'nan':
+                cleaned_specs[key] = str(value).strip()
+        
+        return cleaned_specs
+    
+    def _get_category_use_cases(self, category: str) -> List[str]:
+        """Get common use cases for a category"""
+        
+        use_cases_map = {
+            'Access Equipment': ['building maintenance', 'construction projects', 'installation work', 'painting and decorating'],
+            'Breaking & Drilling': ['concrete breaking', 'demolition work', 'masonry drilling', 'chiseling applications'],
+            'Garden Equipment': ['lawn maintenance', 'garden care', 'landscaping projects', 'grounds maintenance'],
+            'Generators': ['backup power', 'construction sites', 'outdoor events', 'emergency power supply'],
+            'Air Compressors & Tools': ['pneumatic tools', 'spray painting', 'tire inflation', 'construction work'],
+            'Cleaning Equipment': ['industrial cleaning', 'pressure washing', 'surface preparation', 'maintenance cleaning'],
+            'Compaction Equipment': ['soil compaction', 'paving work', 'foundation preparation', 'road construction']
+        }
+        
+        return use_cases_map.get(category, ['professional applications', 'commercial use', 'industrial work'])
+    
+    def _get_detailed_applications(self, category: str, product: Dict) -> List[str]:
+        """Get detailed applications based on category and product features"""
+        
+        base_applications = self._get_category_use_cases(category)
+        
+        # Enhance based on power type
+        power_type = product.get('power_type', '').lower()
+        if power_type == 'petrol':
+            base_applications.extend(['outdoor applications', 'remote locations'])
+        elif power_type == 'electric':
+            base_applications.extend(['indoor use', 'quiet environments'])
+        elif power_type == 'battery':
+            base_applications.extend(['portable applications', 'cordless convenience'])
+        
+        return base_applications[:6]
+    
+    def _get_category_specific_features(self, category: str, product: Dict) -> List[str]:
+        """Get category-specific features"""
+        
+        features = []
+        power_type = product.get('power_type', '')
+        
+        category_features_map = {
+            'Access Equipment': [
+                'Safety harness attachment points',
+                'Non-slip platform surface',
+                'Easy height adjustment',
+                'Stable base design'
+            ],
+            'Breaking & Drilling': [
+                'Anti-vibration technology',
+                'SDS chuck system',
+                'Variable speed control',
+                'Dust extraction compatible'
+            ],
+            'Garden Equipment': [
+                'Easy start system',
+                'Adjustable cutting height',
+                'Large collection capacity',
+                'Ergonomic handle design'
+            ],
+            'Generators': [
+                'Automatic voltage regulation',
+                'Low oil shutdown',
+                'Multiple outlet configuration',
+                'Quiet operation'
+            ]
+        }
+        
+        base_features = category_features_map.get(category, [])
+        
+        # Add power-specific features
+        if power_type:
+            if power_type.lower() == 'electric':
+                features.append('Mains powered operation')
+                features.append('Zero emissions')
+            elif power_type.lower() == 'petrol':
+                features.append('High power output')
+                features.append('Portable operation')
+            elif power_type.lower() == 'battery':
+                features.append('Cordless convenience')
+                features.append('Rechargeable battery system')
+        
+        return features + base_features[:4]
+    
+    def _get_category_essential_specs(self, category: str, product: Dict) -> Dict:
+        """Get essential specifications for a category"""
+        
+        specs = {}
+        
+        # Add brand and model if available
+        if product.get('brand'):
+            specs['Brand'] = product['brand']
+        if product.get('model'):
+            specs['Model'] = product['model']
+        if product.get('power_type'):
+            specs['Power Type'] = product['power_type']
+        
+        # Category-specific essential specs
+        if category == 'Breaking & Drilling':
+            specs.update({
+                'Chuck Type': 'SDS-Max',
+                'Application': 'Heavy-duty breaking and drilling',
+                'Vibration Control': 'Anti-vibration system'
+            })
+        elif category == 'Access Equipment':
+            specs.update({
+                'Platform Type': 'Non-slip surface',
+                'Safety Features': 'Guardrails and harness points',
+                'Mobility': 'Portable design'
+            })
+        elif category == 'Garden Equipment':
+            specs.update({
+                'Starting System': 'Easy-start mechanism',
+                'Cutting System': 'Professional grade blades',
+                'Collection': 'High-capacity grass bag'
+            })
+        elif category == 'Generators':
+            specs.update({
+                'Output Type': 'Clean AC power',
+                'Protection': 'Overload and low-oil protection',
+                'Portability': 'Compact and lightweight'
+            })
+        
+        return specs
+    
+    def _generate_hireman_cta(self, category: str) -> str:
+        """Generate The Hireman style call-to-action"""
+        
+        ctas = [
+            "Available for same-day hire with delivery across London. Contact our team today for availability and expert advice on your requirements.",
+            "Part of our comprehensive hire fleet, available for immediate delivery across London. Call us today to discuss your project requirements.",
+            "Available for hire with full support and delivery service. Contact The Hireman today for competitive rates and professional advice.",
+            "Ready for immediate hire with our reliable delivery service across London. Speak to our experts today about your project needs."
+        ]
+        
+        return random.choice(ctas)
+    
+    def _generate_meta_description(self, product: Dict) -> str:
+        """Generate SEO meta description"""
+        
+        brand = product.get('brand', '')
+        model = product.get('model', '')
+        category = product.get('category', '')
+        
+        if brand and model:
+            return f"Hire {brand} {model} {category.lower()} from The Hireman London. Professional equipment rental with same-day delivery. Expert advice and competitive rates."
+        else:
+            return f"Professional {category.lower()} hire from The Hireman London. Same-day delivery, expert advice, and competitive rates for your project needs."
+    
+    def _generate_wordpress_title(self, product: Dict, style_patterns: Dict) -> str:
+        """Generate WordPress-optimized title"""
+        
+        title = product.get('title', '')
+        if title:
+            # Enhance existing title with hire context
+            return f"{title} - Professional Hire London"
+        else:
+            brand = product.get('brand', '')
+            model = product.get('model', '')
+            category = product.get('category', '')
+            
+            if brand and model:
+                return f"{brand} {model} {category} - Professional Hire London"
+            else:
+                return f"Professional {category} Hire - The Hireman London"
+    
+    def _extract_key_features_list(self, product: Dict, similar_products: List[Dict], 
+                                 manufacturer_info: Dict) -> List[str]:
+        """Extract clean list of key features for WordPress"""
+        
+        features = self._extract_and_enhance_key_features(
+            product, manufacturer_info, {}
+        )
+        
+        # Clean up for WordPress use
+        clean_features = []
+        for feature in features:
+            # Remove HTML tags
+            clean_feature = re.sub(r'<[^>]+>', '', feature)
+            # Clean up text
+            clean_feature = clean_feature.strip()
+            if clean_feature and len(clean_feature) > 5:
+                clean_features.append(clean_feature)
+        
+        return clean_features[:6]
+    
+    def _calculate_style_confidence(self, style_patterns: Dict, similar_products: List[Dict]) -> float:
+        """Calculate confidence score for style matching"""
+        
+        confidence = 0.0
+        
+        # Base confidence from similar products
+        if similar_products:
+            confidence += min(len(similar_products) / 10.0, 0.4)
+        
+        # Style patterns confidence
+        if style_patterns.get('title_patterns'):
+            confidence += 0.3
+        
+        if style_patterns.get('description_patterns'):
+            confidence += 0.3
+        
+        return min(confidence, 1.0)
+    
+    def _generate_fallback_content(self, product_code: str, category_info: Dict) -> Dict:
+        """Generate fallback content when product not found"""
+        
+        category = category_info.get('category', 'Equipment')
+        
+        return {
+            'product_code': product_code,
+            'category': category,
+            'generated_at': datetime.now().isoformat(),
+            'wordpress_content': {
+                'description_and_features': f"Professional {category.lower()} available for hire from The Hireman London. This equipment offers reliable performance for your project requirements.\n\nContact our team for availability and expert advice on your specific needs.",
+                'technical_specifications_html': "<p>Technical specifications will be provided upon inquiry. Contact our team for detailed product information.</p>",
+                'meta_description': f"Professional {category.lower()} hire from The Hireman London. Same-day delivery and expert advice available.",
+                'suggested_title': f"Professional {category} Hire - The Hireman London",
+                'key_features_list': [
+                    "Professional grade equipment",
+                    "Same-day delivery available",
+                    "Expert technical support",
+                    "Competitive hire rates"
+                ]
+            },
+            'research_sources': {
+                'similar_products_analyzed': 0,
+                'manufacturer_website': '',
+                'web_research_completed': 0,
+                'style_patterns_found': 0
+            },
+            'style_confidence': 0.2
+        }
+    
+    # Legacy method support for backward compatibility
+    def _mock_code_analysis(self, product_code: str) -> Dict:
+        """Mock code analysis for fallback"""
+        
+        category_mapping = {
+            '01': 'Access Equipment',
+            '02': 'Air Compressors & Tools',
+            '03': 'Breaking & Drilling',
+            '04': 'Cleaning Equipment',
+            '05': 'Compaction Equipment',
+            '12': 'Garden Equipment',
+            '13': 'Generators',
+            '18': 'Power Tools'
+        }
+        
+        prefix = product_code[:2] if len(product_code) >= 2 else '00'
+        category = category_mapping.get(prefix, 'Equipment')
+        
+        return {
+            'category': category,
+            'product_identifier': product_code
+        }
     
     def _get_similar_products(self, category: str, limit: int = 10) -> List[Dict]:
         """Get similar products for style analysis"""

@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 import os
-from datetime import datetime, timedelta
 import json
+from datetime import datetime, timedelta
 from typing import Dict
 
 # Handle imports gracefully for deployment
@@ -158,50 +158,41 @@ def show_new_product_description():
     st.header("📝 New Product Description Generator")
     st.subheader("Generate professional product content for thehireman.co.uk")
     
-    # Excel file upload option
-    st.subheader("📊 Product Data Source")
-    col1, col2 = st.columns(2)
+    # CSV file status and information
+    st.subheader("📊 WordPress Product Data")
     
-    with col1:
-        st.info("**Option 1: Upload Excel File**\nUpload your product data spreadsheet for better style matching")
-        uploaded_file = st.file_uploader(
-            "Upload Product Data Excel",
-            type=['xlsx', 'xls'],
-            help="Upload Excel file with columns: stock_number, title, description, brand, model, category, manufacturer_website"
-        )
+    if TOOLS_AVAILABLE and 'excel_product_handler' in st.session_state:
+        # Get CSV file information
+        csv_info = st.session_state.excel_product_handler.get_csv_info()
         
-        if uploaded_file:
-            try:
-                # Save uploaded file temporarily
-                temp_path = f"temp_product_data_{uploaded_file.name}"
-                with open(temp_path, "wb") as f:
-                    f.write(uploaded_file.getvalue())
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if csv_info['file_exists']:
+                st.success(f"✅ **CSV File Found**")
+                st.write(f"📁 **File:** `{os.path.basename(csv_info['csv_file_path'])}`")
+                st.write(f"📊 **Products:** {csv_info['total_products']:,}")
+                if csv_info['last_modified']:
+                    st.write(f"🕒 **Modified:** {csv_info['last_modified'].strftime('%Y-%m-%d %H:%M')}")
                 
-                # Load the data
-                if 'excel_product_handler' in st.session_state:
-                    st.session_state.excel_product_handler.excel_file_path = temp_path
+                # Show refresh button
+                if st.button("🔄 Reload CSV Data"):
                     df = st.session_state.excel_product_handler.load_product_data()
-                    st.success(f"✅ Loaded {len(df)} products from Excel file")
+                    st.rerun()
                     
-                    # Show preview
-                    with st.expander("📋 Data Preview"):
-                        st.dataframe(df.head(), use_container_width=True)
-                        
-            except Exception as e:
-                st.error(f"Error loading Excel file: {e}")
-    
-    with col2:
-        st.info("**Option 2: Download Template**\nDownload a template Excel file to populate with your product data")
-        if st.button("📥 Download Excel Template"):
-            if TOOLS_AVAILABLE and 'excel_product_handler' in st.session_state:
-                template_file = st.session_state.excel_product_handler.export_template()
-                st.success(f"Template exported as {template_file}")
-                st.download_button(
-                    label="💾 Download Template",
-                    data=open(template_file, 'rb').read(),
-                    file_name=template_file,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+            else:
+                st.warning("⚠️ **No CSV File Found**")
+                st.write("Please add your WordPress export CSV to:")
+                st.code("./data/product_data/")
+                st.info("**To export from WordPress:**\n1. Go to Products → All Products\n2. Select products to export\n3. Choose 'Export' from Bulk Actions\n4. Download CSV and place in data folder")
+        
+        with col2:
+            st.info("**CSV Format Expected:**\n- **SKU** - Product stock number\n- **Name/Title** - Product title\n- **Description** - Product description\n- **Meta: technical_specification** - Technical specs")
+            
+            if csv_info['file_exists'] and csv_info['sample_columns']:
+                with st.expander("📋 Available Columns"):
+                    for col in csv_info['sample_columns']:
+                        st.write(f"• {col}")
     
     st.divider()
     
@@ -265,15 +256,23 @@ def show_new_product_description():
             try:
                 if TOOLS_AVAILABLE and 'product_generator' in st.session_state:
                     # Generate content using the real system
-                    generated_content = st.session_state.product_generator.generate_product_content(
-                        product_code, basic_info
-                    )
+                    generated_content = st.session_state.product_generator.generate_product_content(product_code)
                 else:
                     # Fallback generation
                     generated_content = generate_mock_product_content(product_code, basic_info)
                 
                 # Display results
-                st.success("✅ Product content generated successfully!")
+                st.success("✅ WordPress-ready product content generated successfully!")
+                
+                # Show research summary
+                research_sources = generated_content.get('research_sources', {})
+                st.info(f"""
+                **Research Summary:**
+                - Similar products analyzed: {research_sources.get('similar_products_analyzed', 0)}
+                - Manufacturer website: {'✅' if research_sources.get('manufacturer_website') else '❌'}
+                - Web research completed: {research_sources.get('web_research_completed', 0)} sources
+                - Style patterns found: {research_sources.get('style_patterns_found', 0)}
+                """)
                 
                 # Show confidence level
                 confidence = generated_content.get('style_confidence', 0.5)
@@ -291,22 +290,97 @@ def show_new_product_description():
                 
                 st.info(f"{confidence_color} **Style Confidence:** {confidence_text} ({confidence_percentage}%)")
                 
-                # Display generated content
-                st.subheader("🏷️ Generated Title")
-                title = generated_content.get('title', 'Title generation failed')
-                st.code(title, language=None)
+                # Get WordPress content
+                wp_content = generated_content.get('wordpress_content', {})
                 
-                # Copy button for title
-                if st.button("📋 Copy Title", key="copy_title"):
-                    st.write("Title copied to clipboard!")
+                # WordPress Title
+                st.subheader("🏷️ WordPress Title")
+                wp_title = wp_content.get('suggested_title', 'Title generation failed')
+                st.code(wp_title, language=None)
                 
-                st.subheader("📄 Generated Description")
-                description = generated_content.get('description', 'Description generation failed')
-                st.text_area("Description:", description, height=200, key="generated_description")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("📋 Copy Title", key="copy_title"):
+                        st.success("Title copied!")
                 
-                # Copy button for description
-                if st.button("📋 Copy Description", key="copy_description"):
-                    st.write("Description copied to clipboard!")
+                # WordPress Description with Key Features
+                st.subheader("📄 WordPress Description & Key Features")
+                st.write("*Ready to paste directly into WordPress post content:*")
+                
+                description_with_features = wp_content.get('description_and_features', 'Description generation failed')
+                
+                # Show formatted version
+                with st.expander("👁️ Preview Formatted Description"):
+                    st.markdown(description_with_features, unsafe_allow_html=True)
+                
+                # Show raw HTML for copying
+                st.text_area(
+                    "Description HTML (copy to WordPress):", 
+                    description_with_features, 
+                    height=300, 
+                    key="wordpress_description"
+                )
+                
+                with col2:
+                    if st.button("📋 Copy Description", key="copy_description"):
+                        st.success("Description copied!")
+                
+                # Technical Specifications HTML
+                st.subheader("⚙️ Technical Specifications HTML")
+                st.write("*Ready to paste directly into WordPress:*")
+                
+                tech_specs_html = wp_content.get('technical_specifications_html', 'Technical specs generation failed')
+                
+                # Show formatted version
+                with st.expander("👁️ Preview Technical Specifications"):
+                    st.markdown(tech_specs_html, unsafe_allow_html=True)
+                
+                # Show raw HTML for copying
+                st.text_area(
+                    "Technical Specifications HTML (copy to WordPress):", 
+                    tech_specs_html, 
+                    height=200, 
+                    key="wordpress_tech_specs"
+                )
+                
+                if st.button("📋 Copy Technical Specs", key="copy_tech_specs"):
+                    st.success("Technical specifications copied!")
+                
+                # SEO Meta Description
+                st.subheader("🔍 SEO Meta Description")
+                meta_desc = wp_content.get('meta_description', 'Meta description generation failed')
+                st.code(meta_desc, language=None)
+                
+                if st.button("📋 Copy Meta Description", key="copy_meta"):
+                    st.success("Meta description copied!")
+                
+                # Key Features List (for reference)
+                with st.expander("📋 Key Features List (for reference)"):
+                    key_features = wp_content.get('key_features_list', [])
+                    for i, feature in enumerate(key_features, 1):
+                        st.write(f"{i}. {feature}")
+                
+                # Usage Instructions
+                st.subheader("📝 WordPress Usage Instructions")
+                st.info("""
+                **How to use this content in WordPress:**
+                
+                1. **Title:** Copy the suggested title for your post/product title
+                2. **Description:** Copy the description HTML directly into your WordPress content editor
+                3. **Technical Specs:** Add the technical specifications HTML to your product details section
+                4. **Meta Description:** Use for your SEO meta description in Yoast or similar plugins
+                
+                The HTML is formatted to work with WordPress and will display properly on your website.
+                """)
+                
+                # Export option
+                if st.button("💾 Export All Content as JSON", key="export_json"):
+                    st.download_button(
+                        label="⬇️ Download WordPress Content",
+                        data=json.dumps(generated_content, indent=2),
+                        file_name=f"wordpress_content_{product_code.replace('/', '_')}.json",
+                        mime="application/json"
+                    )
                 
                 st.subheader("🔧 Generated Technical Specifications")
                 tech_specs = generated_content.get('technical_specs', {})
@@ -354,7 +428,7 @@ def show_new_product_description():
                 st.session_state.chat_history.append({
                     'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M"),
                     'type': 'Product Description Generated',
-                    'content': f"Generated content for {product_code} - {title}"
+                    'content': f"Generated WordPress-ready content for {product_code}"
                 })
                 
             except Exception as e:

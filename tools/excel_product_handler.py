@@ -10,28 +10,111 @@ from urllib.parse import urljoin
 import time
 
 class ExcelProductHandler:
-    def __init__(self, excel_file_path: str = None):
-        self.excel_file_path = excel_file_path
+    def __init__(self, data_folder_path: str = "./data/product_data"):
+        self.data_folder_path = data_folder_path
+        self.csv_file_path = None
         self.product_data = None
         self.manufacturer_cache = {}
         
+        # Automatically find CSV file in data folder
+        self._find_csv_file()
+        
+    def _find_csv_file(self):
+        """Automatically find CSV file in the data folder"""
+        
+        if not os.path.exists(self.data_folder_path):
+            os.makedirs(self.data_folder_path, exist_ok=True)
+            return
+        
+        # Look for CSV files in the data folder
+        csv_files = [f for f in os.listdir(self.data_folder_path) if f.endswith('.csv')]
+        
+        if csv_files:
+            # Use the first CSV file found (or most recent)
+            csv_files.sort(key=lambda x: os.path.getmtime(os.path.join(self.data_folder_path, x)), reverse=True)
+            self.csv_file_path = os.path.join(self.data_folder_path, csv_files[0])
+            print(f"Found product CSV file: {csv_files[0]}")
+        else:
+            print(f"No CSV file found in {self.data_folder_path}. Please add your WordPress export file.")
+            self.csv_file_path = None
+        
     def load_product_data(self, file_path: str = None) -> pd.DataFrame:
-        """Load product data from Excel file"""
+        """Load product data from CSV file"""
         
         if file_path:
-            self.excel_file_path = file_path
+            self.csv_file_path = file_path
+        elif not self.csv_file_path:
+            self._find_csv_file()
         
-        if not self.excel_file_path or not os.path.exists(self.excel_file_path):
+        if not self.csv_file_path or not os.path.exists(self.csv_file_path):
+            print("No CSV file found. Using sample data.")
             return self._create_sample_product_data()
         
         try:
-            # Try to read the Excel file
-            df = pd.read_excel(self.excel_file_path, engine='openpyxl')
-            self.product_data = self._standardize_columns(df)
+            print(f"Loading product data from: {self.csv_file_path}")
+            
+            # Read CSV file with WordPress export format
+            df = pd.read_csv(self.csv_file_path, encoding='utf-8')
+            
+            # Handle duplicate columns (common in WordPress exports)
+            if df.columns.duplicated().any():
+                print("Removing duplicate columns...")
+                df = df.loc[:, ~df.columns.duplicated()]
+            
+            # Handle WordPress CSV format
+            self.product_data = self._process_wordpress_csv(df)
+            
+            print(f"Loaded {len(self.product_data)} products from CSV")
             return self.product_data
+            
         except Exception as e:
-            logging.error(f"Error loading Excel file: {e}")
+            logging.error(f"Error loading CSV file: {e}")
+            print(f"Error loading CSV: {e}")
             return self._create_sample_product_data()
+    
+    def get_product_by_code(self, product_code: str) -> Dict:
+        """Get specific product by its code"""
+        
+        if self.product_data is None:
+            self.product_data = self.load_product_data()
+        
+        # Find product with matching stock number
+        matching_products = self.product_data[
+            self.product_data['stock_number'].str.upper() == product_code.upper()
+        ]
+        
+        if len(matching_products) > 0:
+            row = matching_products.iloc[0]
+            product = {
+                'stock_number': row.get('stock_number', ''),
+                'title': row.get('title', ''),
+                'description': row.get('description', ''),
+                'technical_specs': self._parse_technical_specs(row),
+                'brand': row.get('brand', ''),
+                'model': row.get('model', ''),
+                'category': row.get('category', ''),
+                'manufacturer_website': row.get('manufacturer_website', ''),
+                'power_type': row.get('power_type', ''),
+                'power_output': row.get('power_output', ''),
+                'found': True
+            }
+            return product
+        else:
+            # Return empty product with category analysis
+            category_info = self.analyze_product_code(product_code)
+            return {
+                'stock_number': product_code,
+                'title': '',
+                'description': '',
+                'technical_specs': {},
+                'brand': '',
+                'model': '',
+                'category': category_info.get('category', ''),
+                'manufacturer_website': '',
+                'power_type': '',
+                'power_output': '',
+                'found': False
+            }
     
     def get_products_by_category(self, category: str, limit: int = 10) -> List[Dict]:
         """Get products from the same category for style analysis"""
@@ -179,8 +262,17 @@ class ExcelProductHandler:
         # Analyze descriptions
         descriptions = [p.get('description', '') for p in products if p.get('description')]
         if descriptions:
-            patterns['description_patterns'] = self._analyze_description_patterns(descriptions)
-            patterns['avg_description_length'] = sum(len(d.split()) for d in descriptions) // len(descriptions)
+            # Filter out NaN/float values before analysis
+            valid_descriptions = [d for d in descriptions if d and isinstance(d, str) and len(d.strip()) > 10]
+            if valid_descriptions:
+                patterns['description_patterns'] = self._analyze_description_patterns(valid_descriptions)
+                patterns['avg_description_length'] = sum(len(d.split()) for d in valid_descriptions) // len(valid_descriptions)
+            else:
+                patterns['description_patterns'] = {}
+                patterns['avg_description_length'] = 0
+        else:
+            patterns['description_patterns'] = {}
+            patterns['avg_description_length'] = 0
         
         # Analyze technical specs
         tech_specs = [p.get('technical_specs', {}) for p in products if p.get('technical_specs')]
@@ -192,40 +284,59 @@ class ExcelProductHandler:
         
         return patterns
     
-    def _standardize_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Standardize column names in the DataFrame"""
+    def _process_wordpress_csv(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Process WordPress CSV export to standard format"""
         
-        # Column mapping for different possible names
-        column_mapping = {
-            'stock_no': 'stock_number',
-            'stock_code': 'stock_number',
-            'product_code': 'stock_number',
-            'sku': 'stock_number',
-            'product_name': 'title',
+        print("Processing WordPress CSV format...")
+        
+        # Handle any remaining duplicate columns more thoroughly
+        if df.columns.duplicated().any():
+            print("Handling duplicate columns...")
+            # Make column names unique by adding suffixes
+            cols = pd.Series(df.columns)
+            for dup in cols[cols.duplicated()].unique():
+                cols[cols[cols == dup].index.values.tolist()] = [dup if i == 0 else f'{dup}_{i}' for i in range(sum(cols == dup))]
+            df.columns = cols
+        
+        # WordPress CSV typically has these columns:
+        # - SKU (stock number)
+        # - Name/Title 
+        # - Description
+        # - Meta: technical_specification
+        # - Other meta fields
+        
+        # Map WordPress columns to our standard format
+        wordpress_mapping = {
+            'SKU': 'stock_number',
+            'sku': 'stock_number', 
+            'Name': 'title',
             'name': 'title',
-            'item_name': 'title',
-            'product_title': 'title',
-            'desc': 'description',
-            'product_description': 'description',
-            'details': 'description',
-            'make': 'brand',
-            'manufacturer': 'brand',
-            'product_category': 'category',
-            'type': 'category',
-            'cat': 'category',
-            'manufacturer_url': 'manufacturer_website',
-            'brand_website': 'manufacturer_website',
-            'website': 'manufacturer_website',
-            'power': 'power_output',
-            'specifications': 'technical_specs',
-            'specs': 'technical_specs',
-            'tech_specs': 'technical_specs'
+            'Title': 'title',
+            'Post title': 'title',
+            'Description': 'description',
+            'description': 'description',
+            'Short description': 'description',
+            'Content': 'description',
+            'Meta: technical_specification': 'technical_specs_raw',
+            'meta: technical_specification': 'technical_specs_raw',
+            'Technical Specification': 'technical_specs_raw',
+            'technical_specification': 'technical_specs_raw',
+            'Meta: _technical_specification': 'technical_specs_raw',
+            'meta: _technical_specification': 'technical_specs_raw'
         }
         
-        # Rename columns if they exist
-        for old_name, new_name in column_mapping.items():
-            if old_name in df.columns:
-                df = df.rename(columns={old_name: new_name})
+        # Rename columns based on mapping - but only if they exist and don't create duplicates
+        new_df = df.copy()
+        for wp_col, standard_col in wordpress_mapping.items():
+            if wp_col in new_df.columns and standard_col not in new_df.columns:
+                new_df = new_df.rename(columns={wp_col: standard_col})
+        
+        # Extract additional info from product names/descriptions
+        new_df = self._extract_product_details(new_df)
+        
+        # Process technical specifications
+        if 'technical_specs_raw' in new_df.columns:
+            new_df['technical_specs'] = new_df['technical_specs_raw'].apply(self._parse_wordpress_tech_specs)
         
         # Ensure required columns exist
         required_columns = [
@@ -234,10 +345,170 @@ class ExcelProductHandler:
         ]
         
         for col in required_columns:
-            if col not in df.columns:
-                df[col] = ''
+            if col not in new_df.columns:
+                new_df[col] = ''
+        
+        # Clean and filter data
+        new_df = new_df.dropna(subset=['stock_number', 'title'])  # Remove rows without essential data
+        new_df = new_df[new_df['stock_number'].astype(str).str.strip() != '']  # Remove empty stock numbers
+        
+        return new_df
+    
+    def _extract_product_details(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Extract brand, model, category from product titles and descriptions"""
+        
+        # Extract category from stock number (if follows 01/, 03/ format)
+        df['category'] = df['stock_number'].apply(self._extract_category_from_sku)
+        
+        # Extract brand from title (common brands)
+        common_brands = [
+            'Honda', 'Stihl', 'Makita', 'Bosch', 'Husqvarna', 'DeWalt', 'Hilti', 
+            'Karcher', 'JCB', 'Kubota', 'Yanmar', 'Bomag', 'Weber', 'Belle',
+            'Wacker', 'Mikasa', 'Altrad', 'Evolution', 'Festool', 'Metabo'
+        ]
+        
+        def extract_brand(title):
+            if pd.isna(title):
+                return ''
+            title_upper = str(title).upper()
+            for brand in common_brands:
+                if brand.upper() in title_upper:
+                    return brand
+            return ''
+        
+        df['brand'] = df['title'].apply(extract_brand)
+        
+        # Extract model (typically alphanumeric after brand)
+        def extract_model(title, brand):
+            if pd.isna(title) or not brand:
+                return ''
+            try:
+                title_str = str(title)
+                # Look for alphanumeric patterns after brand name
+                import re
+                pattern = rf'{brand}\s+([A-Z0-9\-]+)'
+                match = re.search(pattern, title_str, re.IGNORECASE)
+                if match:
+                    return match.group(1)
+            except:
+                pass
+            return ''
+        
+        df['model'] = df.apply(lambda row: extract_model(row.get('title', ''), row.get('brand', '')), axis=1)
+        
+        # Extract power type from title/description
+        def extract_power_type(text):
+            if pd.isna(text):
+                return ''
+            text_lower = str(text).lower()
+            if any(word in text_lower for word in ['petrol', 'gasoline', 'gas']):
+                return 'Petrol'
+            elif any(word in text_lower for word in ['electric', '240v', '110v', 'mains']):
+                return 'Electric'
+            elif any(word in text_lower for word in ['diesel']):
+                return 'Diesel'
+            elif any(word in text_lower for word in ['battery', 'cordless']):
+                return 'Battery'
+            elif any(word in text_lower for word in ['hydraulic']):
+                return 'Hydraulic'
+            elif any(word in text_lower for word in ['pneumatic', 'air']):
+                return 'Pneumatic'
+            return ''
+        
+        df['power_type'] = (df['title'].fillna('') + ' ' + df['description'].fillna('')).apply(extract_power_type)
         
         return df
+    
+    def _extract_category_from_sku(self, sku):
+        """Extract category from SKU using prefix mapping"""
+        
+        if pd.isna(sku):
+            return ''
+        
+        sku_str = str(sku)
+        
+        # Category mapping based on codes
+        category_mapping = {
+            '01': 'Access Equipment',
+            '02': 'Air Compressors & Tools',
+            '03': 'Breaking & Drilling',
+            '04': 'Cleaning Equipment',
+            '05': 'Compaction Equipment',
+            '06': 'Concrete Equipment',
+            '07': 'Cutting & Grinding',
+            '08': 'Dehumidifiers',
+            '09': 'Electrical Equipment',
+            '10': 'Fans & Ventilation',
+            '11': 'Floor Care',
+            '12': 'Garden Equipment',
+            '13': 'Generators',
+            '14': 'Hand Tools',
+            '15': 'Heating',
+            '16': 'Lifting Equipment',
+            '17': 'Lighting',
+            '18': 'Power Tools',
+            '19': 'Pumps',
+            '20': 'Safety Equipment',
+            '21': 'Site Equipment',
+            '22': 'Temporary Structures',
+            '23': 'Testing Equipment',
+            '24': 'Waste Management',
+            '25': 'Welding Equipment'
+        }
+        
+        # Extract prefix (e.g., "01" from "01/ABC123" or "01-ABC123")
+        import re
+        prefix_match = re.match(r'^(\d{2})[/\-]', sku_str)
+        
+        if prefix_match:
+            prefix = prefix_match.group(1)
+            return category_mapping.get(prefix, 'Equipment')
+        
+        return 'Equipment'
+    
+    def _parse_wordpress_tech_specs(self, tech_specs_raw):
+        """Parse WordPress technical specifications field"""
+        
+        if pd.isna(tech_specs_raw):
+            return {}
+        
+        specs = {}
+        
+        try:
+            tech_str = str(tech_specs_raw)
+            
+            # WordPress often stores specs as HTML or delimited text
+            # Try to parse different formats
+            
+            # Format 1: HTML-like format
+            if '<' in tech_str and '>' in tech_str:
+                # Remove HTML tags and parse
+                import re
+                tech_str = re.sub(r'<[^>]+>', '\n', tech_str)
+            
+            # Format 2: Key-value pairs separated by various delimiters
+            lines = tech_str.replace('\r', '\n').split('\n')
+            
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                
+                # Try different separators
+                for separator in [':', '=', '-', '|']:
+                    if separator in line:
+                        parts = line.split(separator, 1)
+                        if len(parts) == 2:
+                            key = parts[0].strip()
+                            value = parts[1].strip()
+                            if key and value and len(key) < 50:  # Reasonable key length
+                                specs[key] = value
+                        break
+        
+        except Exception as e:
+            logging.error(f"Error parsing tech specs: {e}")
+        
+        return specs
     
     def _parse_technical_specs(self, row: pd.Series) -> Dict:
         """Parse technical specifications from row data"""
@@ -411,13 +682,22 @@ class ExcelProductHandler:
         if not descriptions:
             return patterns
         
+        # Filter out NaN and empty descriptions
+        valid_descriptions = []
+        for desc in descriptions:
+            if desc and isinstance(desc, str) and len(desc.strip()) > 10:
+                valid_descriptions.append(desc.strip())
+        
+        if not valid_descriptions:
+            return patterns
+        
         # Calculate average length
-        lengths = [len(desc.split()) for desc in descriptions]
+        lengths = [len(desc.split()) for desc in valid_descriptions]
         patterns['average_length'] = sum(lengths) // len(lengths) if lengths else 0
         
         # Find common sentence starters
         starters = []
-        for desc in descriptions:
+        for desc in valid_descriptions:
             sentences = desc.split('.')
             for sentence in sentences[:3]:  # First 3 sentences
                 sentence = sentence.strip()
@@ -531,3 +811,28 @@ class ExcelProductHandler:
         df.to_excel(filename, index=False, engine='openpyxl')
         print(f"Template exported to {filename}")
         return filename
+    
+    def get_csv_info(self) -> Dict:
+        """Get information about the loaded CSV file"""
+        
+        from datetime import datetime
+        
+        info = {
+            'csv_file_path': self.csv_file_path,
+            'file_exists': False,
+            'file_size': 0,
+            'last_modified': None,
+            'total_products': 0,
+            'sample_columns': []
+        }
+        
+        if self.csv_file_path and os.path.exists(self.csv_file_path):
+            info['file_exists'] = True
+            info['file_size'] = os.path.getsize(self.csv_file_path)
+            info['last_modified'] = datetime.fromtimestamp(os.path.getmtime(self.csv_file_path))
+            
+            if self.product_data is not None:
+                info['total_products'] = len(self.product_data)
+                info['sample_columns'] = list(self.product_data.columns)[:10]  # First 10 columns
+        
+        return info

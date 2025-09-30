@@ -1,0 +1,41 @@
+SKU,Name,Description,Meta: technical_specification
+01/STIHL123,Stihl MS170 Chainsaw Professional Grade,"Professional petrol chainsaw ideal for cutting firewood and small tree felling. Features Easy2Start technology and single lever master control for simplified operation. Lightweight design with anti-vibration system for comfortable use.","Engine: 30.1cc 2-stroke
+Bar Length: 12 inch (30cm)
+Weight: 4.1kg
+Power Output: 1.3kW
+Fuel Tank: 0.25L
+Oil Tank: 0.14L
+Chain Type: 3/8"" P
+Noise Level: 103dB"
+03/HILTI001,Hilti TE 3000-AVR Breaker Heavy Duty,"Heavy duty demolition breaker for concrete breaking and chiseling work. Features Active Vibration Reduction (AVR) technology to minimize user fatigue. Ideal for construction and renovation projects requiring powerful breaking performance.","Motor: 1500W Electric
+Impact Energy: 25 Joules
+Impact Rate: 1300 bpm
+Tool Holder: SDS-Max
+Weight: 7.8kg
+Vibration (Main Handle): 7.5 m/s²
+Vibration (Side Handle): 6.2 m/s²
+Cable Length: 4m"
+12/HONDA567,Honda HRX476C Self-Propelled Lawn Mower,"Premium self-propelled rotary mower with Honda's advanced blade brake clutch system. Features Versamow selective mulching system and easy height adjustment. Perfect for medium to large lawns requiring professional results.","Engine: Honda GCV160 160cc 4-stroke
+Cutting Width: 18 inch (46cm)
+Height Adjustment: 19-76mm (7 positions)
+Grass Bag: 60L capacity
+Drive System: Smart Drive variable speed
+Blade Brake: BBC (Blade Brake Clutch)
+Fuel Tank: 0.9L
+Weight: 35kg"
+13/GEN2000,Hyundai HY2000Si Inverter Generator,"Portable inverter generator delivering clean, stable power for sensitive electronics. Ultra-quiet operation with economy mode for extended runtime. Ideal for camping, caravans, and emergency backup power applications.","Engine: Hyundai IC160 79cc 4-stroke
+Power Output: 2000W (2.0kW) max, 1600W rated
+Runtime: 8.5 hours at 25% load
+Fuel Tank: 4.2L
+Noise Level: 58dB at 7m
+Weight: 22kg
+Outlets: 2x 13A sockets, 1x 12V DC
+Inverter Technology: Pure sine wave"
+18/MAKITA890,Makita DHP484Z Combi Drill Cordless,"High-performance cordless combi drill with brushless motor technology for extended runtime and durability. Features 21 torque settings and hammer function for drilling in masonry. Professional grade tool for demanding applications.","Motor: Brushless DC motor
+Chuck: 13mm keyless
+Torque Settings: 21 + drill mode
+Max Torque: 54Nm
+Max Drilling: 38mm wood, 13mm steel, 13mm masonry
+Speed: 0-400/0-1500 RPM
+Battery: 18V LXT (not included)
+Weight: 1.8kg (without battery)"
