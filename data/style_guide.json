@@ -1,0 +1,87 @@
+{
+  "version": "1.0",
+  "last_updated": "2025-09-30",
+  "company_info": {
+    "name": "The Hireman",
+    "website": "thehireman.co.uk",
+    "location": "London",
+    "tone": "professional, factual, no marketing fluff"
+  },
+  "title_guidelines": {
+    "format": "Clean product name only",
+    "avoid": [
+      "Professional Hire London",
+      "- The Hireman London", 
+      "Professional Grade",
+      "Available for Hire"
+    ],
+    "include": [
+      "Brand name",
+      "Model number", 
+      "Product type"
+    ],
+    "examples": {
+      "good": [
+        "Honda HR194 Rotary Lawnmower",
+        "Stihl MS250 Chainsaw",
+        "Belle PCX 13/36 Plate Compactor"
+      ],
+      "bad": [
+        "Honda HR194 Rotary Lawnmower - Professional Hire London",
+        "Professional Chainsaw Hire - The Hireman London"
+      ]
+    }
+  },
+  "description_guidelines": {
+    "structure": {
+      "intro": {
+        "length": "1-2 sentences",
+        "content": "Brief factual description of what the product is and its primary purpose",
+        "avoid": ["marketing language", "superlatives", "hire context"]
+      },
+      "key_features": {
+        "format": "HTML unordered list with <strong>Key features:</strong> header",
+        "content": "Factual technical features and capabilities",
+        "avoid": ["marketing fluff", "subjective claims"]
+      },
+      "notes_section": {
+        "content": "Reserved for manual NB: notifications",
+        "added_by": "user_manually"
+      }
+    },
+    "tone": {
+      "style": "factual, professional, technical",
+      "avoid": [
+        "ideal", "perfect", "exceptional", "amazing", "best",
+        "outstanding", "superior", "premium", "ultimate"
+      ],
+      "prefer": [
+        "designed for", "suitable for", "provides", "features",
+        "includes", "capable of", "offers"
+      ]
+    }
+  },
+  "content_patterns": {
+    "category_intros": {
+      "Access Equipment": "for safe working at height",
+      "Breaking & Drilling": "for drilling and breaking applications",
+      "Garden Equipment": "for garden maintenance", 
+      "Generators": "providing reliable power supply",
+      "Air Compressors & Tools": "for pneumatic applications",
+      "Cleaning Equipment": "for effective cleaning",
+      "Site Equipment": "for construction work",
+      "Heating": "for heating applications",
+      "Pumps": "for water management"
+    },
+    "power_descriptions": {
+      "petrol": "petrol-powered",
+      "electric": "electric",
+      "battery": "battery-powered",
+      "diesel": "diesel-powered",
+      "hydraulic": "hydraulically operated"
+    }
+  },
+  "feedback_log": [],
+  "approved_examples": [],
+  "rejected_examples": []
+}

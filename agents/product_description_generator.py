@@ -7,12 +7,34 @@ from typing import Dict, List, Optional
 from datetime import datetime
 import logging
 import time
+import os
+import sys
+
+# Add the tools directory to the path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'tools'))
+
+try:
+    from style_guide_manager import StyleGuideManager
+    STYLE_GUIDE_AVAILABLE = True
+except ImportError:
+    STYLE_GUIDE_AVAILABLE = False
+    print("Style guide manager not available - using fallback methods")
 
 class ProductDescriptionGenerator:
     def __init__(self, excel_handler=None):
         self.excel_handler = excel_handler
         self.style_patterns = {}
         self.similar_products = []
+        
+        # Initialize style guide manager
+        if STYLE_GUIDE_AVAILABLE:
+            try:
+                self.style_guide_manager = StyleGuideManager()
+            except Exception as e:
+                print(f"Error initializing style guide manager: {e}")
+                self.style_guide_manager = None
+        else:
+            self.style_guide_manager = None
         
     def generate_product_content(self, product_code: str) -> Dict:
         """
@@ -261,7 +283,12 @@ class ProductDescriptionGenerator:
     
     def _generate_brief_intro(self, brand: str, model: str, title: str, category: str, 
                             power_type: str, existing_desc: str) -> str:
-        """Generate a brief 1-2 sentence introduction following your established format"""
+        """Generate a brief 1-2 sentence introduction following style guide"""
+        
+        # Get category-specific intro from style guide
+        category_intro = "for professional applications"
+        if self.style_guide_manager:
+            category_intro = self.style_guide_manager.get_category_intro(category)
         
         # Try to extract a good brief intro from existing description
         if existing_desc and len(existing_desc) > 50:
@@ -274,7 +301,14 @@ class ProductDescriptionGenerator:
                     not clean_sentence.startswith('<') and 
                     not 'hire' in clean_sentence.lower() and
                     not 'london' in clean_sentence.lower()):
-                    return clean_sentence + '.'
+                    
+                    # Check against style guide avoid words
+                    if self.style_guide_manager:
+                        words = clean_sentence.split()
+                        if not any(self.style_guide_manager.should_avoid_word(word) for word in words):
+                            return clean_sentence + '.'
+                    else:
+                        return clean_sentence + '.'
         
         # Generate new brief intro
         if brand and model:
@@ -292,23 +326,53 @@ class ProductDescriptionGenerator:
         else:
             intro += f" is a professional {category.lower()}"
         
-        # Add simple purpose
-        purposes = {
-            'Access Equipment': 'for safe working at height',
-            'Breaking & Drilling': 'for drilling and breaking applications', 
-            'Garden Equipment': 'for garden maintenance',
-            'Generators': 'providing reliable power supply',
-            'Air Compressors & Tools': 'for pneumatic applications',
-            'Cleaning Equipment': 'for effective cleaning',
-            'Site Equipment': 'for construction work',
-            'Heating': 'for heating applications',
-            'Pumps': 'for water management'
-        }
-        
-        purpose = purposes.get(category, 'for professional applications')
-        intro += f" {purpose}."
+        # Use style guide category intro
+        intro += f" {category_intro}."
         
         return intro
+    
+    def add_feedback(self, content_type: str, feedback: str, product_code: str = None, 
+                    content_example: str = None):
+        """
+        Add user feedback to improve future content generation
+        
+        Args:
+            content_type: 'title', 'description', 'features'
+            feedback: User's feedback text
+            product_code: Optional product code this relates to
+            content_example: Optional example of the content being discussed
+        """
+        if self.style_guide_manager:
+            example = None
+            if content_example:
+                example = {
+                    "content": content_example,
+                    "product_code": product_code
+                }
+            
+            self.style_guide_manager.add_feedback(content_type, feedback, example)
+            print(f"Feedback recorded: {feedback}")
+        else:
+            print("Style guide manager not available - feedback not saved")
+    
+    def approve_content(self, content_type: str, content: str, product_code: str = None):
+        """Mark content as approved for future reference"""
+        if self.style_guide_manager:
+            self.style_guide_manager.add_approved_example(content_type, content, product_code)
+            print(f"Content approved and saved as example")
+    
+    def reject_content(self, content_type: str, content: str, reason: str, product_code: str = None):
+        """Mark content as rejected with reason"""
+        if self.style_guide_manager:
+            self.style_guide_manager.add_rejected_example(content_type, content, reason, product_code)
+            print(f"Content rejected and reason saved: {reason}")
+    
+    def get_style_guide_summary(self) -> str:
+        """Get a summary of the current style guide"""
+        if self.style_guide_manager:
+            return self.style_guide_manager.export_style_guide()
+        else:
+            return "Style guide not available"
 
     def _generate_factual_opening(self, brand: str, model: str, title: str, category: str,
                                 power_type: str, existing_desc: str) -> str:
@@ -818,12 +882,23 @@ class ProductDescriptionGenerator:
             return f"Professional {category.lower()} hire from The Hireman London. Same-day delivery, expert advice, and competitive rates for your project needs."
     
     def _generate_wordpress_title(self, product: Dict, style_patterns: Dict) -> str:
-        """Generate clean WordPress title without SEO fluff"""
+        """Generate clean WordPress title following style guide"""
+        
+        # Get style guide preferences if available
+        avoid_phrases = []
+        if self.style_guide_manager:
+            title_guidelines = self.style_guide_manager.get_title_guidelines()
+            avoid_phrases = title_guidelines.get("avoid", [])
         
         title = product.get('title', '')
         if title:
-            # Use the title as-is, removing only obvious hire/location fluff
-            clean_title = title.replace(' - Professional Hire London', '')
+            # Clean the title using style guide
+            clean_title = title
+            for phrase in avoid_phrases:
+                clean_title = clean_title.replace(phrase, '')
+            
+            # Remove common hire/location fluff if not in style guide
+            clean_title = clean_title.replace(' - Professional Hire London', '')
             clean_title = clean_title.replace(' Hire', '')
             clean_title = clean_title.replace(' - London', '')
             return clean_title.strip()

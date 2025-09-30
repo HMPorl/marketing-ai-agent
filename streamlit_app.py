@@ -11,6 +11,7 @@ try:
     from tools.excel_handler import ExcelHandler
     from tools.excel_product_handler import ExcelProductHandler
     from tools.hireman_scraper import HiremanScraper
+    from tools.style_guide_manager import StyleGuideManager
     from agents.content_generator import ContentGenerator
     from agents.product_description_generator import ProductDescriptionGenerator
     from memory.memory_system import MemorySystem
@@ -76,6 +77,8 @@ if TOOLS_AVAILABLE:
                 st.error("Cannot initialize product generator - Excel handler not available")
         if 'memory_system' not in st.session_state:
             st.session_state.memory_system = MemorySystem()
+        if 'style_guide_manager' not in st.session_state:
+            st.session_state.style_guide_manager = StyleGuideManager()
     except Exception as e:
         st.error(f"Error initializing tools: {e}")
         st.exception(e)  # Show full traceback
@@ -100,6 +103,7 @@ def main():
             "Competitor Monitor",
             "Social Media",
             "Analytics",
+            "Style Guide & Training",
             "Settings"
         ]
     )
@@ -121,6 +125,8 @@ def main():
         show_social_media()
     elif page == "Analytics":
         show_analytics()
+    elif page == "Style Guide & Training":
+        show_style_guide_training()
     elif page == "Settings":
         show_settings()
 
@@ -602,6 +608,18 @@ def show_new_product_description():
                 with col1:
                     if st.button("📋 Copy Title", key="copy_title"):
                         st.success("Title copied!")
+                with col2:
+                    # Training feedback buttons for title
+                    feedback_col1, feedback_col2 = st.columns(2)
+                    with feedback_col1:
+                        if st.button("✅ Good Title", key="approve_title"):
+                            if 'style_guide_manager' in st.session_state:
+                                st.session_state.style_guide_manager.add_approved_example("title", wp_title, product_code)
+                                st.success("Title approved for training!")
+                    with feedback_col2:
+                        if st.button("❌ Bad Title", key="reject_title"):
+                            st.session_state['feedback_mode_title'] = True
+                            st.rerun()
                 
                 # WordPress Description with Key Features
                 st.subheader("📄 WordPress Description & Key Features")
@@ -624,6 +642,18 @@ def show_new_product_description():
                 with col2:
                     if st.button("📋 Copy Description", key="copy_description"):
                         st.success("Description copied!")
+                    
+                    # Training feedback for description
+                    desc_col1, desc_col2 = st.columns(2)
+                    with desc_col1:
+                        if st.button("✅ Good Description", key="approve_desc"):
+                            if 'style_guide_manager' in st.session_state:
+                                st.session_state.style_guide_manager.add_approved_example("description", description_with_features, product_code)
+                                st.success("Description approved for training!")
+                    with desc_col2:
+                        if st.button("❌ Bad Description", key="reject_desc"):
+                            st.session_state['feedback_mode_desc'] = True
+                            st.rerun()
                 
                 # Technical Specifications HTML
                 st.subheader("⚙️ Technical Specifications HTML")
@@ -1058,6 +1088,143 @@ Get in touch today!
             with col2:
                 if st.button("Schedule Post"):
                     st.success(f"Post scheduled for {schedule_time} on {platform}!")
+
+def show_style_guide_training():
+    st.header("📚 Style Guide & AI Training")
+    st.subheader("Train the AI agent with your feedback and preferences")
+    
+    if not TOOLS_AVAILABLE or 'style_guide_manager' not in st.session_state:
+        st.error("Style guide manager not available")
+        return
+    
+    style_manager = st.session_state.style_guide_manager
+    
+    # Tabs for different sections
+    tab1, tab2, tab3, tab4 = st.tabs(["📖 Current Style Guide", "📝 Add Feedback", "✅ Approve/Reject Content", "📊 Learning History"])
+    
+    with tab1:
+        st.subheader("📖 Current Style Guide")
+        
+        # Display current style guide
+        style_summary = style_manager.export_style_guide()
+        st.text_area("Style Guide Summary", style_summary, height=400)
+        
+        # Download style guide
+        if st.button("📥 Download Style Guide"):
+            st.download_button(
+                label="⬇️ Download as Text File",
+                data=style_summary,
+                file_name="the_hireman_style_guide.txt",
+                mime="text/plain"
+            )
+    
+    with tab2:
+        st.subheader("📝 Add Training Feedback")
+        st.write("Provide feedback to improve future content generation")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            feedback_type = st.selectbox(
+                "Content Type",
+                ["title", "description", "features", "tone", "general"]
+            )
+            
+            product_code = st.text_input(
+                "Product Code (Optional)",
+                placeholder="e.g., 03/185"
+            )
+        
+        with col2:
+            feedback_text = st.text_area(
+                "Your Feedback",
+                placeholder="Describe what should be improved or avoided...",
+                height=100
+            )
+        
+        content_example = st.text_area(
+            "Content Example (Optional)",
+            placeholder="Paste an example of good or bad content...",
+            height=100
+        )
+        
+        if st.button("💾 Save Feedback", type="primary"):
+            if feedback_text:
+                style_manager.add_feedback(feedback_type, feedback_text, 
+                                         {"content": content_example, "product_code": product_code} if content_example else None)
+                st.success("✅ Feedback saved! The AI will learn from this.")
+                st.rerun()
+            else:
+                st.error("Please provide feedback text")
+    
+    with tab3:
+        st.subheader("✅ Approve or Reject Content")
+        st.write("Mark generated content as good (to learn from) or bad (to avoid)")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**Approve Good Content** ✅")
+            approve_type = st.selectbox("Content Type", ["title", "description", "features"], key="approve_type")
+            approve_content = st.text_area("Content to Approve", height=100, key="approve_content")
+            approve_product = st.text_input("Product Code", key="approve_product")
+            
+            if st.button("✅ Approve Content"):
+                if approve_content:
+                    style_manager.add_approved_example(approve_type, approve_content, approve_product)
+                    st.success("Content approved and saved as example!")
+                    st.rerun()
+        
+        with col2:
+            st.write("**Reject Bad Content** ❌")
+            reject_type = st.selectbox("Content Type", ["title", "description", "features"], key="reject_type")
+            reject_content = st.text_area("Content to Reject", height=100, key="reject_content")
+            reject_reason = st.text_area("Reason for Rejection", height=50, key="reject_reason")
+            reject_product = st.text_input("Product Code", key="reject_product")
+            
+            if st.button("❌ Reject Content"):
+                if reject_content and reject_reason:
+                    style_manager.add_rejected_example(reject_type, reject_content, reject_reason, reject_product)
+                    st.success("Content rejected and reason saved!")
+                    st.rerun()
+                else:
+                    st.error("Please provide both content and reason")
+    
+    with tab4:
+        st.subheader("📊 Learning History")
+        
+        # Recent feedback
+        st.write("**Recent Feedback:**")
+        recent_feedback = style_manager.get_recent_feedback(10)
+        if recent_feedback:
+            for fb in reversed(recent_feedback):
+                with st.expander(f"🕒 {fb.get('timestamp', '')} - {fb.get('content_type', '').title()}"):
+                    st.write(f"**Feedback:** {fb.get('feedback', '')}")
+                    if fb.get('example'):
+                        st.write(f"**Example:** {fb.get('example', {}).get('content', '')[:200]}...")
+        else:
+            st.info("No feedback recorded yet")
+        
+        # Approved examples
+        st.write("**Approved Examples:**")
+        approved = style_manager.get_approved_examples()
+        if approved:
+            for ex in reversed(approved[-5:]):  # Show last 5
+                with st.expander(f"✅ {ex.get('timestamp', '')} - {ex.get('content_type', '').title()}"):
+                    st.write(f"**Content:** {ex.get('content', '')}")
+                    if ex.get('product_code'):
+                        st.write(f"**Product:** {ex.get('product_code')}")
+        else:
+            st.info("No approved examples yet")
+        
+        # Stats
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Feedback", len(style_manager.style_guide.get('feedback_log', [])))
+        with col2:
+            st.metric("Approved Examples", len(style_manager.style_guide.get('approved_examples', [])))
+        with col3:
+            st.metric("Rejected Examples", len(style_manager.style_guide.get('rejected_examples', [])))
 
 def show_analytics():
     st.header("📈 Analytics & Performance")
