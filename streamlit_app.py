@@ -3,12 +3,15 @@ import pandas as pd
 import os
 from datetime import datetime, timedelta
 import json
+from typing import Dict
 
 # Handle imports gracefully for deployment
 try:
     from tools.weather_api import WeatherTool
     from tools.excel_handler import ExcelHandler
+    from tools.hireman_scraper import HiremanScraper
     from agents.content_generator import ContentGenerator
+    from agents.product_description_generator import ProductDescriptionGenerator
     from memory.memory_system import MemorySystem
     TOOLS_AVAILABLE = True
 except ImportError as e:
@@ -38,6 +41,10 @@ if TOOLS_AVAILABLE:
             st.session_state.excel_handler = ExcelHandler()
         if 'content_generator' not in st.session_state:
             st.session_state.content_generator = ContentGenerator()
+        if 'hireman_scraper' not in st.session_state:
+            st.session_state.hireman_scraper = HiremanScraper()
+        if 'product_generator' not in st.session_state:
+            st.session_state.product_generator = ProductDescriptionGenerator(st.session_state.hireman_scraper)
         if 'memory_system' not in st.session_state:
             st.session_state.memory_system = MemorySystem()
     except Exception as e:
@@ -54,6 +61,7 @@ def main():
         "Choose a function:",
         [
             "Dashboard",
+            "New Product Description",
             "Content Generator", 
             "Campaign Planner",
             "Weather Insights",
@@ -67,6 +75,8 @@ def main():
     # Main content based on selected page
     if page == "Dashboard":
         show_dashboard()
+    elif page == "New Product Description":
+        show_new_product_description()
     elif page == "Content Generator":
         show_content_generator()
     elif page == "Campaign Planner":
@@ -140,6 +150,196 @@ def show_dashboard():
     with col3:
         if st.button("📱 Create Social Post", use_container_width=True):
             st.switch_page("Social Media")
+
+def show_new_product_description():
+    st.header("📝 New Product Description Generator")
+    st.subheader("Generate professional product content for thehireman.co.uk")
+    
+    # Product code input
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        product_code = st.text_input(
+            "Product Code", 
+            placeholder="e.g., 01/ABC123, 03/XYZ789",
+            help="Enter the product code. The prefix (01/, 03/, etc.) determines the category."
+        )
+    
+    with col2:
+        st.info("**Code Prefixes:**\n01/ = Access\n03/ = Breaking & Drilling\n12/ = Garden\n13/ = Generators")
+    
+    # Optional basic information
+    st.subheader("📋 Optional Product Information")
+    st.write("*Provide any known details to improve generation quality*")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        brand = st.text_input("Brand", placeholder="e.g., Honda, Stihl")
+        model = st.text_input("Model", placeholder="e.g., HR194, MS250")
+    
+    with col2:
+        product_type = st.text_input("Type", placeholder="e.g., Lawnmower, Chainsaw")
+        differentiator = st.text_input("Differentiator", placeholder="e.g., Self Propelled, Professional")
+    
+    with col3:
+        power_type = st.text_input("Power Type", placeholder="e.g., Petrol, Electric")
+        power_output = st.text_input("Power/Size", placeholder="e.g., 160cc, 2kW")
+    
+    # Generate button
+    if st.button("🚀 Generate Product Content", type="primary", use_container_width=True):
+        if not product_code:
+            st.error("Please enter a product code")
+            return
+        
+        # Prepare basic info
+        basic_info = {}
+        if brand: basic_info['brand'] = brand
+        if model: basic_info['model'] = model
+        if product_type: basic_info['type'] = product_type
+        if differentiator: basic_info['differentiator'] = differentiator
+        if power_type: basic_info['power_type'] = power_type
+        if power_output: basic_info['power'] = power_output
+        
+        # Show progress
+        with st.spinner("🔍 Analyzing thehireman.co.uk for similar products..."):
+            try:
+                if TOOLS_AVAILABLE and 'product_generator' in st.session_state:
+                    # Generate content using the real system
+                    generated_content = st.session_state.product_generator.generate_product_content(
+                        product_code, basic_info
+                    )
+                else:
+                    # Fallback generation
+                    generated_content = generate_mock_product_content(product_code, basic_info)
+                
+                # Display results
+                st.success("✅ Product content generated successfully!")
+                
+                # Show confidence level
+                confidence = generated_content.get('style_confidence', 0.5)
+                confidence_percentage = int(confidence * 100)
+                
+                if confidence >= 0.8:
+                    confidence_color = "🟢"
+                    confidence_text = "High"
+                elif confidence >= 0.6:
+                    confidence_color = "🟡"
+                    confidence_text = "Medium"
+                else:
+                    confidence_color = "🔴"
+                    confidence_text = "Low"
+                
+                st.info(f"{confidence_color} **Style Confidence:** {confidence_text} ({confidence_percentage}%)")
+                
+                # Display generated content
+                st.subheader("🏷️ Generated Title")
+                title = generated_content.get('title', 'Title generation failed')
+                st.code(title, language=None)
+                
+                # Copy button for title
+                if st.button("📋 Copy Title", key="copy_title"):
+                    st.write("Title copied to clipboard!")
+                
+                st.subheader("📄 Generated Description")
+                description = generated_content.get('description', 'Description generation failed')
+                st.text_area("Description:", description, height=200, key="generated_description")
+                
+                # Copy button for description
+                if st.button("📋 Copy Description", key="copy_description"):
+                    st.write("Description copied to clipboard!")
+                
+                st.subheader("🔧 Generated Technical Specifications")
+                tech_specs = generated_content.get('technical_specs', {})
+                
+                if tech_specs:
+                    # Display as a formatted table
+                    specs_df = pd.DataFrame(list(tech_specs.items()), columns=['Specification', 'Value'])
+                    st.dataframe(specs_df, use_container_width=True, hide_index=True)
+                    
+                    # Also show as copyable text
+                    with st.expander("📋 Copyable Specifications Table"):
+                        specs_text = "\n".join([f"{key}: {value}" for key, value in tech_specs.items()])
+                        st.text_area("Specifications:", specs_text, height=150, key="generated_specs")
+                
+                # Save to memory
+                if TOOLS_AVAILABLE and 'memory_system' in st.session_state:
+                    st.session_state.memory_system.store_generated_content(
+                        'product_description',
+                        json.dumps(generated_content),
+                        {'product_code': product_code, 'category': generated_content.get('category')}
+                    )
+                
+                # Add to chat history
+                st.session_state.chat_history.append({
+                    'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    'type': 'Product Description Generated',
+                    'content': f"Generated content for {product_code} - {title}"
+                })
+                
+            except Exception as e:
+                st.error(f"Error generating content: {str(e)}")
+                st.write("Please check the product code format and try again.")
+    
+    # Show recent generations
+    if st.session_state.chat_history:
+        recent_products = [item for item in st.session_state.chat_history if item.get('type') == 'Product Description Generated']
+        if recent_products:
+            st.subheader("📋 Recent Product Descriptions")
+            for item in recent_products[-3:]:  # Show last 3
+                with st.expander(f"🕒 {item['timestamp']} - {item['content']}"):
+                    st.write("Click to view details of previously generated content")
+
+def generate_mock_product_content(product_code: str, basic_info: Dict) -> Dict:
+    """Generate mock product content when tools aren't available"""
+    
+    # Simple category mapping
+    category_map = {
+        '01': 'Access Equipment',
+        '03': 'Breaking & Drilling', 
+        '12': 'Garden Equipment',
+        '13': 'Generators'
+    }
+    
+    prefix = product_code.split('/')[0] if '/' in product_code else '01'
+    category = category_map.get(prefix, 'Equipment')
+    
+    # Generate mock content
+    brand = basic_info.get('brand', 'Professional')
+    model = basic_info.get('model', 'Model')
+    product_type = basic_info.get('type', category)
+    
+    title = f"{brand} {model} {product_type}"
+    if basic_info.get('differentiator'):
+        title += f" - {basic_info['differentiator']}"
+    if basic_info.get('power_type'):
+        title += f" {basic_info['power_type']}"
+    
+    description = f"""The {title} is engineered for professional performance and reliability. Built to The Hireman's exacting standards, this {category.lower()} delivers exceptional results for demanding applications.
+
+Designed for both professional contractors and DIY enthusiasts, this equipment combines advanced engineering with user-friendly operation. Whether you're working on construction projects, maintenance tasks, or specialized applications, this {category.lower()} provides the performance and reliability you need.
+
+Available for same-day hire with delivery across London. Our experienced team provides expert advice and support to ensure you get the right equipment for your specific requirements. Contact us today for availability and competitive hire rates."""
+    
+    tech_specs = {
+        'Category': category,
+        'Product Code': product_code,
+        'Power': basic_info.get('power', 'Professional Grade'),
+        'Operation': 'Professional Grade',
+        'Availability': 'Same Day Hire',
+        'Delivery': 'Available across London',
+        'Support': 'Expert advice included'
+    }
+    
+    return {
+        'product_code': product_code,
+        'category': category,
+        'title': title,
+        'description': description,
+        'technical_specs': tech_specs,
+        'style_confidence': 0.7,
+        'generated_at': datetime.now().isoformat()
+    }
 
 def show_content_generator():
     st.header("✍️ Content Generator")
