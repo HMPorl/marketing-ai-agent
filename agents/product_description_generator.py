@@ -224,7 +224,7 @@ class ProductDescriptionGenerator:
     def _generate_hireman_description(self, product: Dict, description_patterns: Dict, 
                                     key_features_patterns: Dict, manufacturer_info: Dict, 
                                     web_research: Dict) -> str:
-        """Generate The Hireman style description with key features"""
+        """Generate The Hireman style description matching senior manager writing style"""
         
         # Extract product details
         brand = product.get('brand', '')
@@ -232,60 +232,241 @@ class ProductDescriptionGenerator:
         title = product.get('title', '')
         category = product.get('category', '')
         power_type = product.get('power_type', '')
+        existing_desc = product.get('description', '')
         
-        # Build description
+        # Build description following The Hireman pattern
         description_parts = []
         
-        # Opening paragraph - product introduction
-        opening = f"The {brand} {model} is a " if brand and model else f"This {category.lower()} is a "
-        
-        # Add power type and category context
-        if power_type:
-            opening += f"professional {power_type.lower()} {category.lower()}"
-        else:
-            opening += f"professional {category.lower()}"
-        
-        # Add primary use case based on category
-        use_cases = self._get_category_use_cases(category)
-        if use_cases:
-            opening += f", ideal for {use_cases[0]}"
-        
-        # Add key selling point from existing description or research
-        existing_desc = product.get('description', '')
-        if existing_desc and len(existing_desc) > 50:
-            # Extract key selling point from first sentence
-            first_sentence = existing_desc.split('.')[0]
-            if 'ideal' in first_sentence.lower() or 'perfect' in first_sentence.lower():
-                opening += f". {first_sentence}"
-            else:
-                opening += f". It offers exceptional performance and reliability for professional use."
-        else:
-            opening += f". It offers exceptional performance and reliability for professional use."
-        
+        # 1. OPENING PARAGRAPH - What it is
+        opening = self._generate_factual_opening(brand, model, title, category, power_type, existing_desc)
         description_parts.append(opening)
         
-        # Key features section
-        key_features = self._extract_and_enhance_key_features(
-            product, manufacturer_info, web_research
-        )
-        
+        # 2. KEY FEATURES - Structured list
+        key_features = self._extract_genuine_features(product, manufacturer_info, web_research)
         if key_features:
             description_parts.append("\n\n<strong>Key features:</strong>")
-            description_parts.append("<ul>")
-            for feature in key_features[:6]:  # Limit to 6 key features
-                description_parts.append(f" \t<li>{feature}</li>")
-            description_parts.append("</ul>")
+            description_parts.append("\n<ul>")
+            for feature in key_features:
+                description_parts.append(f"\n\t<li>{feature}</li>")
+            description_parts.append("\n</ul>")
         
-        # Applications and use cases
-        applications = self._get_detailed_applications(category, product)
+        # 3. APPLICATIONS - Where it's used and why (without marketing fluff)
+        applications = self._generate_practical_applications(category, product, power_type)
         if applications:
-            description_parts.append(f"\n\nIdeal for {', '.join(applications[:4])}.")
-        
-        # Call to action - The Hireman style
-        cta = self._generate_hireman_cta(category)
-        description_parts.append(f"\n\n{cta}")
+            description_parts.append(f"\n\n{applications}")
         
         return ''.join(description_parts)
+    
+    def _generate_factual_opening(self, brand: str, model: str, title: str, category: str, 
+                                power_type: str, existing_desc: str) -> str:
+        """Generate a factual, professional opening paragraph"""
+        
+        # Try to extract the essence from existing description if it's good
+        if existing_desc and len(existing_desc) > 100:
+            # Look for the first sentence that describes what the product is
+            sentences = existing_desc.split('.')
+            for sentence in sentences:
+                clean_sentence = sentence.strip()
+                # Skip HTML tags and look for substantial descriptive sentences
+                if (len(clean_sentence) > 30 and 
+                    not clean_sentence.startswith('<') and 
+                    ('is a' in clean_sentence or 'provides' in clean_sentence or 
+                     'designed' in clean_sentence or 'suitable' in clean_sentence)):
+                    return clean_sentence + '.'
+        
+        # Generate new opening based on product details
+        if brand and model:
+            opening = f"The {brand} {model}"
+        elif title:
+            # Extract brand/model from title if available
+            title_parts = title.split(',')[0].strip()
+            opening = f"The {title_parts}"
+        else:
+            opening = f"This {category.lower()}"
+        
+        # Add description of what it is
+        if power_type:
+            opening += f" is a {power_type.lower()}"
+        else:
+            opening += " is a"
+        
+        # Add category context
+        category_descriptions = {
+            'Access Equipment': 'access platform',
+            'Breaking & Drilling': 'drilling tool',
+            'Garden Equipment': 'garden tool',
+            'Generators': 'generator',
+            'Air Compressors & Tools': 'air compressor',
+            'Cleaning Equipment': 'cleaning system',
+            'Site Equipment': 'construction tool',
+            'Heating': 'heating equipment',
+            'Pumps': 'pump system'
+        }
+        
+        category_desc = category_descriptions.get(category, category.lower())
+        opening += f" {category_desc}"
+        
+        # Add simple purpose based on category
+        purposes = {
+            'Access Equipment': 'designed for safe working at height',
+            'Breaking & Drilling': 'designed for breaking and drilling applications',
+            'Garden Equipment': 'designed for garden maintenance',
+            'Generators': 'designed for reliable power supply',
+            'Air Compressors & Tools': 'designed for pneumatic applications',
+            'Cleaning Equipment': 'designed for effective cleaning applications',
+            'Site Equipment': 'designed for construction and site work',
+            'Heating': 'designed for heating applications',
+            'Pumps': 'designed for water management'
+        }
+        
+        purpose = purposes.get(category, 'designed for professional use')
+        opening += f" {purpose}."
+        
+        return opening
+    
+    def _extract_genuine_features(self, product: Dict, manufacturer_info: Dict, 
+                                web_research: Dict) -> List[str]:
+        """Extract genuine, factual features without marketing fluff"""
+        
+        features = []
+        
+        # 1. Extract from existing well-structured descriptions
+        existing_desc = product.get('description', '')
+        if '<li>' in existing_desc:
+            soup = BeautifulSoup(existing_desc, 'html.parser')
+            li_items = soup.find_all('li')
+            for item in li_items:
+                feature_text = item.get_text().strip()
+                # Only include substantial, factual features
+                if (feature_text and len(feature_text) > 10 and 
+                    not any(fluff in feature_text.lower() for fluff in 
+                           ['ideal', 'perfect', 'exceptional', 'amazing', 'best'])):
+                    features.append(feature_text)
+        
+        # 2. Extract key technical specifications as features
+        tech_specs = product.get('technical_specs', {})
+        if isinstance(tech_specs, dict):
+            spec_features = []
+            for key, value in tech_specs.items():
+                if (value and str(value) != 'nan' and 
+                    key.lower() in ['power', 'voltage', 'weight', 'capacity', 'dimensions', 
+                                   'motor', 'engine', 'fuel tank', 'cutting width', 'platform height']):
+                    spec_features.append(f"{key.replace('_', ' ').title()}: {value}")
+            features.extend(spec_features[:3])  # Limit tech specs to 3
+        
+        # 3. Add factual manufacturer features (avoid marketing language)
+        if manufacturer_info.get('features'):
+            mfr_features = []
+            for feature in manufacturer_info['features'][:3]:
+                # Filter out marketing language
+                if not any(fluff in feature.lower() for fluff in 
+                          ['revolutionary', 'cutting-edge', 'world-class', 'premium', 'ultimate']):
+                    mfr_features.append(feature)
+            features.extend(mfr_features)
+        
+        # 4. Add category-specific practical features
+        category_features = self._get_practical_category_features(
+            product.get('category', ''), product
+        )
+        features.extend(category_features)
+        
+        # Clean up and deduplicate
+        unique_features = []
+        seen_lowercase = set()
+        
+        for feature in features:
+            feature_clean = feature.strip()
+            feature_lower = feature_clean.lower()
+            
+            # Skip if too similar to existing feature
+            if not any(existing in feature_lower or feature_lower in existing 
+                      for existing in seen_lowercase):
+                unique_features.append(feature_clean)
+                seen_lowercase.add(feature_lower)
+        
+        return unique_features[:5]  # Maximum 5 features for readability
+    
+    def _get_practical_category_features(self, category: str, product: Dict) -> List[str]:
+        """Get practical, factual features specific to category"""
+        
+        features = []
+        power_type = product.get('power_type', '').lower()
+        
+        category_features = {
+            'Access Equipment': [
+                'Full guardrail protection',
+                'Non-slip platform surface',
+                'Emergency lowering system',
+                'Stabilising outriggers'
+            ],
+            'Breaking & Drilling': [
+                'Anti-vibration handle',
+                'Variable speed control',
+                'SDS chuck system',
+                'Dust extraction port'
+            ],
+            'Garden Equipment': [
+                'Easy start system',
+                'Adjustable cutting height',
+                'Grass collection bag',
+                'Foldable handle'
+            ],
+            'Generators': [
+                'Automatic voltage regulation',
+                'Low oil shutdown protection',
+                'Multiple power outlets',
+                'Fuel gauge'
+            ],
+            'Site Equipment': [
+                'Robust steel construction',
+                'Weather resistant finish',
+                'Easy transport design',
+                'Quick setup system'
+            ]
+        }
+        
+        # Get category-specific features
+        if category in category_features:
+            features.extend(category_features[category][:2])
+        
+        # Add power-specific features
+        if power_type == 'petrol':
+            features.append('Petrol engine operation')
+        elif power_type == 'electric':
+            features.append('Electric motor operation')
+        elif power_type == 'battery':
+            features.append('Cordless battery operation')
+        
+        return features
+    
+    def _generate_practical_applications(self, category: str, product: Dict, power_type: str) -> str:
+        """Generate practical applications without marketing fluff"""
+        
+        # Base applications by category
+        applications_map = {
+            'Access Equipment': 'Suitable for maintenance work, installation tasks, and building work where safe access to height is required',
+            'Breaking & Drilling': 'Suitable for concrete work, masonry drilling, and demolition applications in construction and renovation projects',
+            'Garden Equipment': 'Suitable for lawn maintenance, garden care, and grounds keeping in both domestic and commercial settings',
+            'Generators': 'Suitable for construction sites, outdoor events, and backup power applications where mains electricity is unavailable',
+            'Site Equipment': 'Suitable for construction projects, site preparation, and general building work',
+            'Cleaning Equipment': 'Suitable for surface cleaning, pressure washing, and maintenance cleaning in industrial and commercial environments',
+            'Heating': 'Suitable for temporary heating, space heating, and climate control in construction and industrial applications'
+        }
+        
+        base_application = applications_map.get(category, 
+            'Suitable for professional applications where reliable equipment is required')
+        
+        # Enhance based on power type
+        if power_type.lower() == 'petrol':
+            enhancement = ' The petrol engine provides mobility for outdoor and remote locations.'
+        elif power_type.lower() == 'electric':
+            enhancement = ' Electric operation ensures quiet running and emission-free use indoors.'
+        elif power_type.lower() == 'battery':
+            enhancement = ' Battery operation provides cord-free convenience and portability.'
+        else:
+            enhancement = ''
+        
+        return base_application + enhancement
     
     def _extract_and_enhance_key_features(self, product: Dict, manufacturer_info: Dict, 
                                         web_research: Dict) -> List[str]:
@@ -604,7 +785,7 @@ class ProductDescriptionGenerator:
                                  manufacturer_info: Dict) -> List[str]:
         """Extract clean list of key features for WordPress"""
         
-        features = self._extract_and_enhance_key_features(
+        features = self._extract_genuine_features(
             product, manufacturer_info, {}
         )
         
