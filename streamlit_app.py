@@ -511,25 +511,42 @@ def show_new_product_description():
                         status_text.text("Step 2/4: Analyzing product data...")
                         progress_bar.progress(50)
                         
-                        # Generate content using the real system with timeout protection
-                        import signal
+                        # Generate content using the real system with threading timeout protection
+                        import threading
                         import time
-                        
-                        def timeout_handler(signum, frame):
-                            raise TimeoutError("Content generation timed out")
-                        
-                        # Set a 60-second timeout for content generation
-                        if hasattr(signal, 'SIGALRM'):  # Unix systems
-                            signal.signal(signal.SIGALRM, timeout_handler)
-                            signal.alarm(60)
                         
                         status_text.text("Step 3/4: Generating content...")
                         progress_bar.progress(75)
                         
-                        generated_content = st.session_state.product_generator.generate_product_content(product_code)
+                        # Use threading approach for timeout that works in Streamlit Cloud
+                        generated_content = None
+                        generation_error = None
                         
-                        if hasattr(signal, 'SIGALRM'):  # Clear timeout
-                            signal.alarm(0)
+                        def generate_content():
+                            nonlocal generated_content, generation_error
+                            try:
+                                generated_content = st.session_state.product_generator.generate_product_content(product_code)
+                            except Exception as e:
+                                generation_error = e
+                        
+                        # Start generation in a separate thread
+                        generation_thread = threading.Thread(target=generate_content)
+                        generation_thread.daemon = True
+                        generation_thread.start()
+                        
+                        # Wait for completion with timeout
+                        generation_thread.join(timeout=60)
+                        
+                        # Check if generation completed
+                        if generation_thread.is_alive():
+                            # Thread is still running - timeout occurred
+                            raise TimeoutError("Content generation timed out after 60 seconds")
+                        
+                        if generation_error:
+                            raise generation_error
+                        
+                        if generated_content is None:
+                            raise RuntimeError("Content generation completed but returned no content")
                         
                         status_text.text("Step 4/4: Preparing display...")
                         progress_bar.progress(100)
