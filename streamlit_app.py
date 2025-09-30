@@ -315,6 +315,34 @@ def show_new_product_description():
             st.error("❌ No product data loaded. Please ensure your CSV file is in the data/product_data folder.")
             return
         
+        # Pre-generation validation
+        st.write("🔍 **Pre-generation checks...**")
+        validation_progress = st.progress(0)
+        
+        # Check 1: Product exists
+        validation_progress.progress(25)
+        test_product = st.session_state.excel_product_handler.get_product_by_code(product_code)
+        if not test_product or not test_product.get('found', False):
+            st.error(f"❌ Product '{product_code}' not found in database.")
+            st.info("💡 Try a different product code (e.g., '03/185') or check the format.")
+            return
+        
+        # Check 2: Generator ready
+        validation_progress.progress(50)
+        if 'product_generator' not in st.session_state:
+            st.error("❌ Product generator not ready. Please refresh the page.")
+            return
+            
+        # Check 3: Basic product info
+        validation_progress.progress(75)
+        st.success(f"✅ Found product: {test_product.get('title', 'Unknown title')}")
+        
+        validation_progress.progress(100)
+        st.write("✅ **All checks passed - generating content...**")
+        
+        # Clear validation progress
+        validation_progress.empty()
+        
         # Prepare basic info
         basic_info = {}
         if brand: basic_info['brand'] = brand
@@ -334,6 +362,10 @@ def show_new_product_description():
         
         with st.spinner(progress_text):
             try:
+                # Add error container to prevent flashing
+                error_container = st.container()
+                success_container = st.container()
+                
                 if TOOLS_AVAILABLE and 'product_generator' in st.session_state:
                     # Generate content using the real system
                     generated_content = st.session_state.product_generator.generate_product_content(product_code)
@@ -341,22 +373,24 @@ def show_new_product_description():
                     # Fallback generation
                     generated_content = generate_mock_product_content(product_code, basic_info)
                 
-                # Display results
-                st.success("✅ WordPress-ready product content generated successfully!")
-                
-                # Show research summary
-                research_sources = generated_content.get('research_sources', {})
-                st.info(f"""
-                **Research Summary:**
-                - Similar products analyzed: {research_sources.get('similar_products_analyzed', 0)}
-                - Manufacturer website: {'✅' if research_sources.get('manufacturer_website') else '❌'}
-                - Web research completed: {research_sources.get('web_research_completed', 0)} sources
-                - Style patterns found: {research_sources.get('style_patterns_found', 0)}
-                """)
-                
-                # Show confidence level
-                confidence = generated_content.get('style_confidence', 0.5)
-                confidence_percentage = int(confidence * 100)
+                # If we get here, generation was successful
+                with success_container:
+                    # Display results
+                    st.success("✅ WordPress-ready product content generated successfully!")
+                    
+                    # Show research summary
+                    research_sources = generated_content.get('research_sources', {})
+                    st.info(f"""
+                    **Research Summary:**
+                    - Similar products analyzed: {research_sources.get('similar_products_analyzed', 0)}
+                    - Manufacturer website: {'✅' if research_sources.get('manufacturer_website') else '❌'}
+                    - Web research completed: {research_sources.get('web_research_completed', 0)} sources
+                    - Style patterns found: {research_sources.get('style_patterns_found', 0)}
+                    """)
+                    
+                    # Show confidence level
+                    confidence = generated_content.get('style_confidence', 0.5)
+                    confidence_percentage = int(confidence * 100)
                 
                 if confidence >= 0.8:
                     confidence_color = "🟢"
@@ -512,11 +546,39 @@ def show_new_product_description():
                 })
                 
             except Exception as e:
-                st.error(f"Error generating content: {str(e)}")
-                st.write("Please check the product code format and try again.")
-                # Show detailed error for debugging
-                import traceback
-                st.text(traceback.format_exc())
+                # Use the error container to show errors clearly
+                with error_container:
+                    st.error("❌ **Content Generation Failed**")
+                    st.error(f"**Error:** {str(e)}")
+                    
+                    # Show detailed debugging information
+                    with st.expander("🔧 Error Details (Click to expand)", expanded=False):
+                        st.write("**Error Type:**", type(e).__name__)
+                        st.write("**Error Message:**", str(e))
+                        
+                        # Show detailed error for debugging
+                        import traceback
+                        st.text("**Full Traceback:**")
+                        st.text(traceback.format_exc())
+                        
+                        # Show current state for debugging
+                        st.write("**Debug Information:**")
+                        st.write(f"- Product Code: {product_code}")
+                        st.write(f"- Tools Available: {TOOLS_AVAILABLE}")
+                        st.write(f"- Product Generator in Session: {'product_generator' in st.session_state}")
+                        if 'excel_product_handler' in st.session_state:
+                            handler = st.session_state.excel_product_handler
+                            st.write(f"- Handler Has Data: {handler.has_data}")
+                            st.write(f"- Data Summary: {handler.data_summary}")
+                    
+                    st.warning("💡 **Troubleshooting Tips:**")
+                    st.write("1. Check the product code format (e.g., '03/185')")
+                    st.write("2. Ensure the product exists in your CSV data")
+                    st.write("3. Check the 'System Status (Debug)' section above")
+                    st.write("4. Try refreshing the page if the error persists")
+                    
+                # Don't continue execution after an error
+                st.stop()
     
     # Show recent generations
     if st.session_state.chat_history:
