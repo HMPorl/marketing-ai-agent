@@ -42,6 +42,9 @@ if TOOLS_AVAILABLE:
             st.session_state.excel_handler = ExcelHandler()
         if 'excel_product_handler' not in st.session_state:
             st.session_state.excel_product_handler = ExcelProductHandler()
+            # Ensure data is loaded
+            if not st.session_state.excel_product_handler.has_data:
+                st.session_state.excel_product_handler.load_product_data()
         if 'content_generator' not in st.session_state:
             st.session_state.content_generator = ContentGenerator()
         if 'hireman_scraper' not in st.session_state:
@@ -52,6 +55,7 @@ if TOOLS_AVAILABLE:
             st.session_state.memory_system = MemorySystem()
     except Exception as e:
         st.error(f"Error initializing tools: {e}")
+        st.exception(e)  # Show full traceback
         TOOLS_AVAILABLE = False
 
 def main():
@@ -233,6 +237,33 @@ def show_new_product_description():
     if st.button("🚀 Generate Product Content", type="primary", use_container_width=True):
         if not product_code:
             st.error("Please enter a product code")
+            return
+            
+        # Debug information
+        with st.expander("🔧 System Status (Debug)", expanded=False):
+            st.write(f"**Tools Available:** {TOOLS_AVAILABLE}")
+            if TOOLS_AVAILABLE:
+                st.write(f"**Product Handler in Session:** {'excel_product_handler' in st.session_state}")
+                st.write(f"**Product Generator in Session:** {'product_generator' in st.session_state}")
+                
+                if 'excel_product_handler' in st.session_state:
+                    handler = st.session_state.excel_product_handler
+                    st.write(f"**Data Summary:** {handler.data_summary}")
+                    st.write(f"**Has Data:** {handler.has_data}")
+                else:
+                    st.write("**Product Handler:** Not initialized")
+        
+        # Check if we have the necessary tools
+        if not TOOLS_AVAILABLE:
+            st.error("❌ Required tools not available. Please check your installation.")
+            return
+            
+        if 'product_generator' not in st.session_state:
+            st.error("❌ Product generator not initialized. Please refresh the page.")
+            return
+            
+        if not st.session_state.excel_product_handler.has_data:
+            st.error("❌ No product data loaded. Please ensure your CSV file is in the data/product_data folder.")
             return
         
         # Prepare basic info

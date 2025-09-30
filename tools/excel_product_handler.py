@@ -19,6 +19,25 @@ class ExcelProductHandler:
         # Automatically find CSV file in data folder
         self._find_csv_file()
         
+        # Auto-load data if CSV file is found
+        if self.csv_file_path:
+            try:
+                self.load_product_data()
+            except Exception as e:
+                print(f"Warning: Could not auto-load product data: {e}")
+    
+    @property
+    def has_data(self) -> bool:
+        """Check if product data is loaded"""
+        return self.product_data is not None and len(self.product_data) > 0
+    
+    @property
+    def data_summary(self) -> str:
+        """Get a summary of loaded data"""
+        if not self.has_data:
+            return "No product data loaded"
+        return f"{len(self.product_data)} products loaded from {os.path.basename(self.csv_file_path) if self.csv_file_path else 'unknown file'}"
+        
     def _find_csv_file(self):
         """Automatically find CSV file in the data folder"""
         
