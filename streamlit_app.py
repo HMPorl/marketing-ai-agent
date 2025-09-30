@@ -511,42 +511,17 @@ def show_new_product_description():
                         status_text.text("Step 2/4: Analyzing product data...")
                         progress_bar.progress(50)
                         
-                        # Generate content using the real system with threading timeout protection
-                        import threading
-                        import time
-                        
                         status_text.text("Step 3/4: Generating content...")
                         progress_bar.progress(75)
                         
-                        # Use threading approach for timeout that works in Streamlit Cloud
-                        generated_content = None
-                        generation_error = None
-                        
-                        def generate_content():
-                            nonlocal generated_content, generation_error
-                            try:
-                                generated_content = st.session_state.product_generator.generate_product_content(product_code)
-                            except Exception as e:
-                                generation_error = e
-                        
-                        # Start generation in a separate thread
-                        generation_thread = threading.Thread(target=generate_content)
-                        generation_thread.daemon = True
-                        generation_thread.start()
-                        
-                        # Wait for completion with timeout
-                        generation_thread.join(timeout=60)
-                        
-                        # Check if generation completed
-                        if generation_thread.is_alive():
-                            # Thread is still running - timeout occurred
-                            raise TimeoutError("Content generation timed out after 60 seconds")
-                        
-                        if generation_error:
-                            raise generation_error
-                        
-                        if generated_content is None:
-                            raise RuntimeError("Content generation completed but returned no content")
+                        # Generate content directly (removing threading complexity for better Streamlit compatibility)
+                        try:
+                            generated_content = st.session_state.product_generator.generate_product_content(product_code)
+                        except Exception as e:
+                            # Clear progress indicators before raising
+                            status_text.empty()
+                            progress_bar.empty()
+                            raise e
                         
                         status_text.text("Step 4/4: Preparing display...")
                         progress_bar.progress(100)
