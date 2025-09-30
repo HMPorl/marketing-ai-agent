@@ -6,8 +6,8 @@ from datetime import datetime
 import logging
 
 class ProductDescriptionGenerator:
-    def __init__(self, hireman_scraper=None):
-        self.hireman_scraper = hireman_scraper
+    def __init__(self, excel_handler=None):
+        self.excel_handler = excel_handler
         self.style_patterns = {}
         self.similar_products = []
         
@@ -20,7 +20,7 @@ class ProductDescriptionGenerator:
         print(f"Generating content for product code: {product_code}")
         
         # Analyze product code
-        code_analysis = self.hireman_scraper.analyze_product_code(product_code) if self.hireman_scraper else self._mock_code_analysis(product_code)
+        code_analysis = self.excel_handler.analyze_product_code(product_code) if self.excel_handler else self._mock_code_analysis(product_code)
         
         # Find similar products for style analysis
         similar_products = self._get_similar_products(code_analysis['category'])
@@ -28,14 +28,24 @@ class ProductDescriptionGenerator:
         # Analyze style patterns
         style_patterns = self._analyze_style_patterns(similar_products)
         
+        # Get manufacturer information if available
+        manufacturer_info = {}
+        if basic_info and basic_info.get('manufacturer_website'):
+            manufacturer_info = self._get_manufacturer_info(
+                basic_info.get('manufacturer_website'), 
+                basic_info.get('name', '')
+            )
+        
         # Generate content components
         generated_content = {
             'product_code': product_code,
             'category': code_analysis['category'],
             'generated_at': datetime.now().isoformat(),
             'title': self._generate_title(code_analysis, basic_info, style_patterns),
-            'description': self._generate_description(code_analysis, basic_info, style_patterns),
+            'description': self._generate_description(code_analysis, basic_info, style_patterns, manufacturer_info),
             'technical_specs': self._generate_technical_specs(code_analysis, basic_info, style_patterns),
+            'manufacturer_info': manufacturer_info,
+            'manufacturer_website': basic_info.get('manufacturer_website', '') if basic_info else '',
             'style_confidence': self._calculate_confidence(similar_products, style_patterns)
         }
         
@@ -44,11 +54,14 @@ class ProductDescriptionGenerator:
     def _get_similar_products(self, category: str, limit: int = 10) -> List[Dict]:
         """Get similar products for style analysis"""
         
-        if self.hireman_scraper:
+        if self.excel_handler:
             try:
                 print(f"Fetching similar products in category: {category}")
-                similar_products = self.hireman_scraper.find_similar_products(category, limit)
-                return similar_products
+                similar_products = self.excel_handler.get_products_by_category(category, limit)
+                if isinstance(similar_products, list):
+                    return similar_products
+                else:
+                    return self._mock_similar_products(category)
             except Exception as e:
                 logging.error(f"Error fetching similar products: {e}")
                 return self._mock_similar_products(category)
@@ -58,10 +71,22 @@ class ProductDescriptionGenerator:
     def _analyze_style_patterns(self, products: List[Dict]) -> Dict:
         """Analyze style patterns from similar products"""
         
-        if self.hireman_scraper:
-            return self.hireman_scraper.analyze_style_patterns(products)
+        if self.excel_handler:
+            return self.excel_handler.analyze_style_patterns(products)
         else:
             return self._mock_style_patterns()
+    
+    def _get_manufacturer_info(self, manufacturer_website: str, product_name: str = "") -> Dict:
+        """Get manufacturer information from website"""
+        
+        if self.excel_handler and manufacturer_website:
+            try:
+                return self.excel_handler.scrape_manufacturer_info(manufacturer_website, product_name)
+            except Exception as e:
+                logging.error(f"Error getting manufacturer info: {e}")
+                return {'website': manufacturer_website, 'error': str(e)}
+        else:
+            return {}
     
     def _generate_title(self, code_analysis: Dict, basic_info: Dict, style_patterns: Dict) -> str:
         """Generate product title following The Hireman's format"""
@@ -120,7 +145,7 @@ class ProductDescriptionGenerator:
         
         return generated_title
     
-    def _generate_description(self, code_analysis: Dict, basic_info: Dict, style_patterns: Dict) -> str:
+    def _generate_description(self, code_analysis: Dict, basic_info: Dict, style_patterns: Dict, manufacturer_info: Dict = None) -> str:
         """Generate product description matching The Hireman's style"""
         
         category = code_analysis['category']
@@ -130,6 +155,11 @@ class ProductDescriptionGenerator:
         desc_patterns = style_patterns.get('description_patterns', {})
         sentence_starters = desc_patterns.get('sentence_starters', [])
         avg_length = desc_patterns.get('avg_description_length', 50)
+        
+        # Use manufacturer info if available
+        manufacturer_features = []
+        if manufacturer_info and manufacturer_info.get('features'):
+            manufacturer_features = manufacturer_info['features'][:3]  # Use top 3 features
         
         # Generate description paragraphs
         paragraphs = []
@@ -150,12 +180,16 @@ class ProductDescriptionGenerator:
         
         # Benefits and features paragraph
         benefits = self._get_category_benefits(category)
-        features_text = f"{starter} {random.choice(benefits)}. "
+        if manufacturer_features:
+            # Incorporate manufacturer features
+            features_text = f"{starter} {random.choice(benefits)} with {', '.join(manufacturer_features[:2])}. "
+        else:
+            features_text = f"{starter} {random.choice(benefits)}. "
         
         # Add professional qualities
         quality_phrases = [
             "Built to professional standards",
-            "Engineered for reliability and performance",
+            "Engineered for reliability and performance", 
             "Designed for demanding applications",
             "Trusted by professionals across London",
             "Combining durability with ease of use"
@@ -170,6 +204,12 @@ class ProductDescriptionGenerator:
             app_text = f"Ideal for {', '.join(applications[:-1])} and {applications[-1] if len(applications) > 1 else applications[0]}. "
             app_text += "Whether you're a professional contractor or undertaking a DIY project, this equipment delivers the performance you need."
             paragraphs.append(app_text)
+        
+        # Manufacturer credibility (if available)
+        if manufacturer_info and manufacturer_info.get('company_name'):
+            company_name = manufacturer_info['company_name']
+            manufacturer_text = f"Manufactured by {company_name}, this equipment represents years of engineering excellence and innovation in the industry."
+            paragraphs.append(manufacturer_text)
         
         # Hire benefits paragraph
         hire_benefits = [

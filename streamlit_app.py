@@ -9,6 +9,7 @@ from typing import Dict
 try:
     from tools.weather_api import WeatherTool
     from tools.excel_handler import ExcelHandler
+    from tools.excel_product_handler import ExcelProductHandler
     from tools.hireman_scraper import HiremanScraper
     from agents.content_generator import ContentGenerator
     from agents.product_description_generator import ProductDescriptionGenerator
@@ -39,12 +40,14 @@ if TOOLS_AVAILABLE:
             st.session_state.weather_tool = WeatherTool("")  # Empty API key for demo
         if 'excel_handler' not in st.session_state:
             st.session_state.excel_handler = ExcelHandler()
+        if 'excel_product_handler' not in st.session_state:
+            st.session_state.excel_product_handler = ExcelProductHandler()
         if 'content_generator' not in st.session_state:
             st.session_state.content_generator = ContentGenerator()
         if 'hireman_scraper' not in st.session_state:
             st.session_state.hireman_scraper = HiremanScraper()
         if 'product_generator' not in st.session_state:
-            st.session_state.product_generator = ProductDescriptionGenerator(st.session_state.hireman_scraper)
+            st.session_state.product_generator = ProductDescriptionGenerator(st.session_state.excel_product_handler)
         if 'memory_system' not in st.session_state:
             st.session_state.memory_system = MemorySystem()
     except Exception as e:
@@ -155,6 +158,53 @@ def show_new_product_description():
     st.header("📝 New Product Description Generator")
     st.subheader("Generate professional product content for thehireman.co.uk")
     
+    # Excel file upload option
+    st.subheader("📊 Product Data Source")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.info("**Option 1: Upload Excel File**\nUpload your product data spreadsheet for better style matching")
+        uploaded_file = st.file_uploader(
+            "Upload Product Data Excel",
+            type=['xlsx', 'xls'],
+            help="Upload Excel file with columns: stock_number, title, description, brand, model, category, manufacturer_website"
+        )
+        
+        if uploaded_file:
+            try:
+                # Save uploaded file temporarily
+                temp_path = f"temp_product_data_{uploaded_file.name}"
+                with open(temp_path, "wb") as f:
+                    f.write(uploaded_file.getvalue())
+                
+                # Load the data
+                if 'excel_product_handler' in st.session_state:
+                    st.session_state.excel_product_handler.excel_file_path = temp_path
+                    df = st.session_state.excel_product_handler.load_product_data()
+                    st.success(f"✅ Loaded {len(df)} products from Excel file")
+                    
+                    # Show preview
+                    with st.expander("📋 Data Preview"):
+                        st.dataframe(df.head(), use_container_width=True)
+                        
+            except Exception as e:
+                st.error(f"Error loading Excel file: {e}")
+    
+    with col2:
+        st.info("**Option 2: Download Template**\nDownload a template Excel file to populate with your product data")
+        if st.button("📥 Download Excel Template"):
+            if TOOLS_AVAILABLE and 'excel_product_handler' in st.session_state:
+                template_file = st.session_state.excel_product_handler.export_template()
+                st.success(f"Template exported as {template_file}")
+                st.download_button(
+                    label="💾 Download Template",
+                    data=open(template_file, 'rb').read(),
+                    file_name=template_file,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+    
+    st.divider()
+    
     # Product code input
     col1, col2 = st.columns([2, 1])
     
@@ -177,10 +227,12 @@ def show_new_product_description():
     with col1:
         brand = st.text_input("Brand", placeholder="e.g., Honda, Stihl")
         model = st.text_input("Model", placeholder="e.g., HR194, MS250")
+        product_name = st.text_input("Product Name", placeholder="e.g., Rotary Lawnmower")
     
     with col2:
         product_type = st.text_input("Type", placeholder="e.g., Lawnmower, Chainsaw")
         differentiator = st.text_input("Differentiator", placeholder="e.g., Self Propelled, Professional")
+        manufacturer_website = st.text_input("Manufacturer Website", placeholder="e.g., https://www.honda.co.uk")
     
     with col3:
         power_type = st.text_input("Power Type", placeholder="e.g., Petrol, Electric")
@@ -196,13 +248,20 @@ def show_new_product_description():
         basic_info = {}
         if brand: basic_info['brand'] = brand
         if model: basic_info['model'] = model
+        if product_name: basic_info['name'] = product_name
         if product_type: basic_info['type'] = product_type
         if differentiator: basic_info['differentiator'] = differentiator
         if power_type: basic_info['power_type'] = power_type
         if power_output: basic_info['power'] = power_output
+        if manufacturer_website: basic_info['manufacturer_website'] = manufacturer_website
         
         # Show progress
-        with st.spinner("🔍 Analyzing thehireman.co.uk for similar products..."):
+        progress_text = "🔍 Analyzing product data"
+        if manufacturer_website:
+            progress_text += " and manufacturer website"
+        progress_text += "..."
+        
+        with st.spinner(progress_text):
             try:
                 if TOOLS_AVAILABLE and 'product_generator' in st.session_state:
                     # Generate content using the real system
@@ -262,6 +321,27 @@ def show_new_product_description():
                         specs_text = "\n".join([f"{key}: {value}" for key, value in tech_specs.items()])
                         st.text_area("Specifications:", specs_text, height=150, key="generated_specs")
                 
+                # Show manufacturer information if available
+                manufacturer_info = generated_content.get('manufacturer_info', {})
+                manufacturer_website_link = generated_content.get('manufacturer_website', '')
+                
+                if manufacturer_info or manufacturer_website_link:
+                    st.subheader("🏭 Manufacturer Information")
+                    
+                    if manufacturer_website_link:
+                        st.write(f"**Website:** [{manufacturer_website_link}]({manufacturer_website_link})")
+                    
+                    if manufacturer_info.get('company_name'):
+                        st.write(f"**Company:** {manufacturer_info['company_name']}")
+                    
+                    if manufacturer_info.get('features'):
+                        st.write("**Key Features from Manufacturer:**")
+                        for feature in manufacturer_info['features'][:5]:
+                            st.write(f"• {feature}")
+                    
+                    if manufacturer_info.get('error'):
+                        st.warning(f"⚠️ Could not fully scrape manufacturer website: {manufacturer_info['error']}")
+                
                 # Save to memory
                 if TOOLS_AVAILABLE and 'memory_system' in st.session_state:
                     st.session_state.memory_system.store_generated_content(
@@ -280,6 +360,9 @@ def show_new_product_description():
             except Exception as e:
                 st.error(f"Error generating content: {str(e)}")
                 st.write("Please check the product code format and try again.")
+                # Show detailed error for debugging
+                import traceback
+                st.text(traceback.format_exc())
     
     # Show recent generations
     if st.session_state.chat_history:
