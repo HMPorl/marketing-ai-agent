@@ -10,8 +10,30 @@ from urllib.parse import urljoin
 import time
 
 class ExcelProductHandler:
-    def __init__(self, data_folder_path: str = "./data/product_data"):
-        self.data_folder_path = data_folder_path
+    def __init__(self, data_folder_path: str = None):
+        # Handle both local and cloud deployment paths
+        if data_folder_path is None:
+            # Try multiple possible paths for robustness
+            possible_paths = [
+                "./data/product_data",
+                "data/product_data", 
+                os.path.join(os.path.dirname(__file__), "..", "data", "product_data"),
+                os.path.join(os.getcwd(), "data", "product_data")
+            ]
+            
+            self.data_folder_path = None
+            for path in possible_paths:
+                if os.path.exists(path):
+                    self.data_folder_path = path
+                    break
+            
+            if self.data_folder_path is None:
+                # Create the directory if none exists
+                self.data_folder_path = "./data/product_data"
+                os.makedirs(self.data_folder_path, exist_ok=True)
+        else:
+            self.data_folder_path = data_folder_path
+            
         self.csv_file_path = None
         self.product_data = None
         self.manufacturer_cache = {}
@@ -25,6 +47,9 @@ class ExcelProductHandler:
                 self.load_product_data()
             except Exception as e:
                 print(f"Warning: Could not auto-load product data: {e}")
+                # In cloud deployment, log more details
+                import traceback
+                print(f"Full error: {traceback.format_exc()}")
     
     @property
     def has_data(self) -> bool:

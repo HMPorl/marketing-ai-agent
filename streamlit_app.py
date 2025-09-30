@@ -15,9 +15,18 @@ try:
     from agents.product_description_generator import ProductDescriptionGenerator
     from memory.memory_system import MemorySystem
     TOOLS_AVAILABLE = True
+    IMPORT_ERROR = None
 except ImportError as e:
     TOOLS_AVAILABLE = False
-    st.warning(f"Some tools not available: {e}. Running in basic mode.")
+    IMPORT_ERROR = str(e)
+    st.error(f"Import error: {e}")
+    st.error("Running in basic mode - some features may not work.")
+except Exception as e:
+    TOOLS_AVAILABLE = False
+    IMPORT_ERROR = str(e)
+    st.error(f"Unexpected error during imports: {e}")
+    import traceback
+    st.text(traceback.format_exc())
 
 # Set page config
 st.set_page_config(
@@ -42,21 +51,37 @@ if TOOLS_AVAILABLE:
             st.session_state.excel_handler = ExcelHandler()
         if 'excel_product_handler' not in st.session_state:
             st.session_state.excel_product_handler = ExcelProductHandler()
-            # Ensure data is loaded
-            if not st.session_state.excel_product_handler.has_data:
-                st.session_state.excel_product_handler.load_product_data()
+            # Ensure data is loaded and show status
+            handler = st.session_state.excel_product_handler
+            if not handler.has_data:
+                st.error("⚠️ Product data not loaded. Check CSV file availability.")
+                st.info(f"Looking for CSV files in: {handler.data_folder_path}")
+                # List available files for debugging
+                if os.path.exists(handler.data_folder_path):
+                    files = os.listdir(handler.data_folder_path)
+                    st.info(f"Files found: {files}")
+                else:
+                    st.error(f"Data folder not found: {handler.data_folder_path}")
+            else:
+                st.success(f"✅ {handler.data_summary}")
+                
         if 'content_generator' not in st.session_state:
             st.session_state.content_generator = ContentGenerator()
         if 'hireman_scraper' not in st.session_state:
             st.session_state.hireman_scraper = HiremanScraper()
         if 'product_generator' not in st.session_state:
-            st.session_state.product_generator = ProductDescriptionGenerator(st.session_state.excel_product_handler)
+            if 'excel_product_handler' in st.session_state:
+                st.session_state.product_generator = ProductDescriptionGenerator(st.session_state.excel_product_handler)
+            else:
+                st.error("Cannot initialize product generator - Excel handler not available")
         if 'memory_system' not in st.session_state:
             st.session_state.memory_system = MemorySystem()
     except Exception as e:
         st.error(f"Error initializing tools: {e}")
         st.exception(e)  # Show full traceback
         TOOLS_AVAILABLE = False
+else:
+    st.warning(f"Tools not available. Import error: {IMPORT_ERROR if 'IMPORT_ERROR' in locals() else 'Unknown'}")
 
 def main():
     st.title("🎯 Marketing AI Agent")
@@ -242,16 +267,40 @@ def show_new_product_description():
         # Debug information
         with st.expander("🔧 System Status (Debug)", expanded=False):
             st.write(f"**Tools Available:** {TOOLS_AVAILABLE}")
+            st.write(f"**Current Working Directory:** {os.getcwd()}")
+            st.write(f"**Python Path:** {os.path.dirname(__file__)}")
+            
+            # Check data folder existence
+            data_paths = ["./data/product_data", "data/product_data"]
+            for path in data_paths:
+                exists = os.path.exists(path)
+                st.write(f"**Path {path} exists:** {exists}")
+                if exists:
+                    try:
+                        files = os.listdir(path)
+                        csv_files = [f for f in files if f.endswith('.csv')]
+                        st.write(f"**CSV files in {path}:** {csv_files}")
+                    except Exception as e:
+                        st.write(f"**Error listing {path}:** {e}")
+            
             if TOOLS_AVAILABLE:
                 st.write(f"**Product Handler in Session:** {'excel_product_handler' in st.session_state}")
                 st.write(f"**Product Generator in Session:** {'product_generator' in st.session_state}")
                 
                 if 'excel_product_handler' in st.session_state:
                     handler = st.session_state.excel_product_handler
+                    st.write(f"**Data Folder Path:** {handler.data_folder_path}")
+                    st.write(f"**CSV File Path:** {handler.csv_file_path}")
                     st.write(f"**Data Summary:** {handler.data_summary}")
                     st.write(f"**Has Data:** {handler.has_data}")
+                    
+                    if hasattr(handler, 'product_data') and handler.product_data is not None:
+                        st.write(f"**Product Data Type:** {type(handler.product_data)}")
+                        st.write(f"**Product Data Shape:** {handler.product_data.shape if hasattr(handler.product_data, 'shape') else 'No shape'}")
                 else:
                     st.write("**Product Handler:** Not initialized")
+            else:
+                st.write(f"**Import Error:** {IMPORT_ERROR if 'IMPORT_ERROR' in globals() else 'Unknown'}")
         
         # Check if we have the necessary tools
         if not TOOLS_AVAILABLE:
