@@ -225,6 +225,111 @@ def show_new_product_description():
     
     st.divider()
     
+    # Check for content to display from previous generation or restored session
+    if 'show_content' in st.session_state and st.session_state['show_content']:
+        generated_content = st.session_state['show_content']
+        
+        # Display the content using the same structure as generation
+        with st.container():
+            st.success("✅ WordPress-ready product content displayed!")
+            
+            # Research summary if available
+            research_sources = generated_content.get('research_sources', {})
+            if research_sources:
+                st.info(f"""
+                **Research Summary:**
+                - Similar products analyzed: {research_sources.get('similar_products_analyzed', 0)}
+                - Manufacturer website: {'✅' if research_sources.get('manufacturer_website') else '❌'}
+                - Web research completed: {research_sources.get('web_research_completed', 0)} sources
+                - Style patterns found: {research_sources.get('style_patterns_found', 0)}
+                """)
+            
+            # Show confidence if available
+            confidence = generated_content.get('style_confidence', 0.5)
+            confidence_percentage = int(confidence * 100)
+            if confidence >= 0.8:
+                confidence_color = "🟢"
+                confidence_text = "High"
+            elif confidence >= 0.6:
+                confidence_color = "🟡"
+                confidence_text = "Medium"
+            else:
+                confidence_color = "🔴"
+                confidence_text = "Low"
+            
+            st.info(f"{confidence_color} **Style Confidence:** {confidence_text} ({confidence_percentage}%)")
+            
+            # Display WordPress content
+            wp_content = generated_content.get('wordpress_content', {})
+            
+            # WordPress Title
+            st.subheader("🏷️ WordPress Title")
+            wp_title = wp_content.get('suggested_title', 'Title generation failed')
+            st.code(wp_title, language=None)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("📋 Copy Title", key="copy_title_restored"):
+                    st.success("Title copied!")
+            
+            # WordPress Description with Key Features
+            st.subheader("📄 WordPress Description & Key Features")
+            st.write("*Ready to paste directly into WordPress post content:*")
+            
+            description_with_features = wp_content.get('description_and_features', 'Description generation failed')
+            
+            # Show formatted version
+            with st.expander("👁️ Preview Formatted Description"):
+                st.markdown(description_with_features, unsafe_allow_html=True)
+            
+            # Show raw HTML for copying
+            st.text_area(
+                "Description HTML (copy to WordPress):", 
+                description_with_features, 
+                height=300, 
+                key="wordpress_description_restored"
+            )
+            
+            with col2:
+                if st.button("📋 Copy Description", key="copy_description_restored"):
+                    st.success("Description copied!")
+            
+            # Technical Specifications
+            st.subheader("⚙️ Technical Specifications HTML")
+            tech_specs_html = wp_content.get('technical_specifications_html', 'Technical specs generation failed')
+            
+            with st.expander("👁️ Preview Technical Specifications"):
+                st.markdown(tech_specs_html, unsafe_allow_html=True)
+            
+            st.text_area(
+                "Technical Specifications HTML (copy to WordPress):", 
+                tech_specs_html, 
+                height=200, 
+                key="wordpress_tech_specs_restored"
+            )
+            
+            # SEO Meta Description
+            st.subheader("🔍 SEO Meta Description")
+            meta_desc = wp_content.get('meta_description', 'Meta description generation failed')
+            st.code(meta_desc, language=None)
+            
+            # Export option
+            if st.button("💾 Export Content as JSON", key="export_json_restored"):
+                st.download_button(
+                    label="⬇️ Download WordPress Content",
+                    data=json.dumps(generated_content, indent=2),
+                    file_name=f"wordpress_content_restored.json",
+                    mime="application/json"
+                )
+            
+            # Clear display
+            if st.button("🗑️ Clear Display", key="clear_display"):
+                st.session_state['show_content'] = None
+                st.rerun()
+        
+        st.divider()
+        st.write("**Generate new content below:**")
+    
     # Product code input
     col1, col2 = st.columns([2, 1])
     
@@ -263,6 +368,30 @@ def show_new_product_description():
         if not product_code:
             st.error("Please enter a product code")
             return
+        
+        # Check if content was previously generated and offer to restore
+        if f'generated_content_{product_code}' in st.session_state:
+            st.info(f"💾 **Previously generated content found for {product_code}**")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("📋 Show Previous Results", use_container_width=True):
+                    # Display the previously generated content
+                    generated_content = st.session_state[f'generated_content_{product_code}']
+                    st.success("✅ Showing previously generated content")
+                    # Jump to display section (we'll add this)
+                    st.session_state['show_content'] = generated_content
+                    st.rerun()
+            with col2:
+                if st.button("🔄 Generate Fresh Content", use_container_width=True):
+                    # Clear previous content and generate new
+                    if f'generated_content_{product_code}' in st.session_state:
+                        del st.session_state[f'generated_content_{product_code}']
+                    # Continue with normal generation
+                    pass
+                else:
+                    return  # Don't generate if user hasn't chosen
+        
+        # Normal generation flow continues...
             
         # Debug information
         with st.expander("🔧 System Status (Debug)", expanded=False):
@@ -366,14 +495,79 @@ def show_new_product_description():
                 error_container = st.container()
                 success_container = st.container()
                 
+                # Add progress tracking to prevent timeout appearance
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
                 if TOOLS_AVAILABLE and 'product_generator' in st.session_state:
-                    # Generate content using the real system
-                    generated_content = st.session_state.product_generator.generate_product_content(product_code)
+                    # Break generation into stages with progress updates
+                    status_text.text("Step 1/4: Initializing generation...")
+                    progress_bar.progress(25)
+                    
+                    # Set a session state flag to track generation
+                    st.session_state[f'generating_{product_code}'] = True
+                    
+                    try:
+                        status_text.text("Step 2/4: Analyzing product data...")
+                        progress_bar.progress(50)
+                        
+                        # Generate content using the real system with timeout protection
+                        import signal
+                        import time
+                        
+                        def timeout_handler(signum, frame):
+                            raise TimeoutError("Content generation timed out")
+                        
+                        # Set a 60-second timeout for content generation
+                        if hasattr(signal, 'SIGALRM'):  # Unix systems
+                            signal.signal(signal.SIGALRM, timeout_handler)
+                            signal.alarm(60)
+                        
+                        status_text.text("Step 3/4: Generating content...")
+                        progress_bar.progress(75)
+                        
+                        generated_content = st.session_state.product_generator.generate_product_content(product_code)
+                        
+                        if hasattr(signal, 'SIGALRM'):  # Clear timeout
+                            signal.alarm(0)
+                        
+                        status_text.text("Step 4/4: Preparing display...")
+                        progress_bar.progress(100)
+                        
+                        # Clear generation flag
+                        st.session_state[f'generating_{product_code}'] = False
+                        
+                    except TimeoutError:
+                        status_text.empty()
+                        progress_bar.empty()
+                        with error_container:
+                            st.error("⏱️ **Content Generation Timed Out**")
+                            st.warning("The generation process took longer than expected (60 seconds).")
+                            st.info("💡 **Suggestions:**")
+                            st.write("• Try again with a simpler product")
+                            st.write("• Check your internet connection")
+                            st.write("• Contact support if this persists")
+                        st.stop()
+                        
                 else:
                     # Fallback generation
+                    status_text.text("Using fallback generation...")
+                    progress_bar.progress(50)
                     generated_content = generate_mock_product_content(product_code, basic_info)
+                    progress_bar.progress(100)
+                
+                # Clear progress indicators
+                status_text.empty()
+                progress_bar.empty()
                 
                 # If we get here, generation was successful
+                # Store the result in session state to prevent loss
+                st.session_state[f'generated_content_{product_code}'] = generated_content
+                st.session_state['last_generated_product'] = product_code
+                
+                # Set content to display immediately
+                st.session_state['show_content'] = generated_content
+                
                 with success_container:
                     # Display results
                     st.success("✅ WordPress-ready product content generated successfully!")
@@ -689,7 +883,13 @@ Perfect for projects requiring precision and efficiency, {product_name} combines
                 """
                 
                 st.success("Product description generated!")
-                st.text_area("Generated Content:", generated_content, height=300)
+                
+                # Display the generated content
+                st.subheader("📝 Generated Product Description")
+                st.markdown(generated_content)
+                
+                # Option to copy content
+                st.text_area("Copy Content (Click to select all):", generated_content, height=300)
                 
                 # Add to history
                 st.session_state.chat_history.append({
