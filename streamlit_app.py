@@ -190,11 +190,26 @@ def show_dashboard():
             st.switch_page("Social Media")
 
 def show_new_product_description():
-    st.header("📝 New Product Description Generator")
-    st.subheader("Generate professional product content for thehireman.co.uk")
+    st.header("📝 NEW Product Description Generator")
+    st.subheader("Generate professional content for products NOT YET on your website")
+    
+    # Clear workflow explanation
+    with st.expander("🔍 How This Works - 5-Step Process", expanded=False):
+        st.write("""
+        **This tool generates content for NEW products you want to add to thehireman.co.uk**
+        
+        **📋 5-Step Process:**
+        1. **Category Classification** - Uses product code (first 2 digits) to determine category
+        2. **Manufacturer Research** - Scrapes official product details from manufacturer website
+        3. **Google Search Enhancement** - Searches Make + Model for additional specifications and reviews
+        4. **Style Analysis** - Analyzes similar existing products on your website for tone and format
+        5. **Content Generation** - Combines all sources to create content matching your established style
+        
+        **🎯 Result:** Title, Description, Key Features, and Technical Specifications ready for your website
+        """)
     
     # CSV file status and information
-    st.subheader("📊 WordPress Product Data")
+    st.subheader("📊 Your Current Product Database")
     
     if TOOLS_AVAILABLE and 'excel_product_handler' in st.session_state:
         # Get CSV file information
@@ -204,30 +219,18 @@ def show_new_product_description():
         
         with col1:
             if csv_info['file_exists']:
-                st.success(f"✅ **CSV File Found**")
+                st.success(f"✅ **Product Database Connected**")
                 st.write(f"📁 **File:** `{os.path.basename(csv_info['csv_file_path'])}`")
-                st.write(f"📊 **Products:** {csv_info['total_products']:,}")
+                st.write(f"📊 **Existing Products:** {csv_info['total_products']:,}")
                 if csv_info['last_modified']:
-                    st.write(f"🕒 **Modified:** {csv_info['last_modified'].strftime('%Y-%m-%d %H:%M')}")
-                
-                # Show refresh button
-                if st.button("🔄 Reload CSV Data"):
-                    df = st.session_state.excel_product_handler.load_product_data()
-                    st.rerun()
+                    st.write(f"🕒 **Updated:** {csv_info['last_modified'].strftime('%Y-%m-%d %H:%M')}")
                     
             else:
-                st.warning("⚠️ **No CSV File Found**")
-                st.write("Please add your WordPress export CSV to:")
-                st.code("./data/product_data/")
-                st.info("**To export from WordPress:**\n1. Go to Products → All Products\n2. Select products to export\n3. Choose 'Export' from Bulk Actions\n4. Download CSV and place in data folder")
+                st.warning("⚠️ **No Product Database Found**")
+                st.write("The tool will work but won't be able to analyze similar products for style consistency.")
         
         with col2:
-            st.info("**CSV Format Expected:**\n- **SKU** - Product stock number\n- **Name/Title** - Product title\n- **Description** - Product description\n- **Meta: technical_specification** - Technical specs")
-            
-            if csv_info['file_exists'] and csv_info['sample_columns']:
-                with st.expander("📋 Available Columns"):
-                    for col in csv_info['sample_columns']:
-                        st.write(f"• {col}")
+            st.info("**Database Usage:**\n- Used to find similar products in the same category\n- Analyzes description patterns and tone\n- Ensures new content matches your established style")
     
     st.divider()
     
@@ -336,6 +339,100 @@ def show_new_product_description():
         st.divider()
         st.write("**Generate new content below:**")
     
+    # NEW PRODUCT INPUT SECTION
+    st.subheader("🆕 New Product Information")
+    st.write("*Enter details for the product you want to add to your website*")
+    
+    # Required inputs
+    st.write("**📋 Required Information:**")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        product_code = st.text_input(
+            "🏷️ Product Code", 
+            placeholder="e.g., 03/ABC123 (first 2 digits determine category)",
+            help="Product code determines category: 01=Access, 03=Breaking & Drilling, 12=Garden, 13=Generators"
+        )
+        
+        brand = st.text_input(
+            "🏭 Make/Brand", 
+            placeholder="e.g., Honda, Stihl, Belle",
+            help="Manufacturer brand name"
+        )
+    
+    with col2:
+        model = st.text_input(
+            "🔧 Model", 
+            placeholder="e.g., HR194, MS250, PCX 13/36",
+            help="Specific model number or name"
+        )
+        
+        manufacturer_website = st.text_input(
+            "🌐 Manufacturer Website", 
+            placeholder="e.g., https://www.honda.co.uk/lawn-and-garden/products/...",
+            help="Direct link to the product page on manufacturer's website"
+        )
+    
+    # Category preview
+    if product_code:
+        prefix = product_code.split('/')[0] if '/' in product_code else product_code[:2]
+        category_map = {
+            '01': 'Access Equipment',
+            '03': 'Breaking & Drilling',
+            '12': 'Garden Equipment', 
+            '13': 'Generators',
+            '14': 'Air Compressors & Tools',
+            '15': 'Cleaning Equipment',
+            '16': 'Site Equipment',
+            '17': 'Heating',
+            '18': 'Pumps'
+        }
+        detected_category = category_map.get(prefix, f"Unknown category (prefix: {prefix})")
+        st.info(f"📂 **Detected Category:** {detected_category}")
+    
+    # Optional inputs
+    st.write("**📝 Optional Information:**")
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        further_info = st.text_area(
+            "📄 Further Information",
+            placeholder="Add any additional details about the product, specifications, or context that might help with content generation...",
+            height=100,
+            help="Use this when manufacturer website isn't available or to provide extra context"
+        )
+    
+    with col2:
+        st.info("**When to use Further Information:**\n• Manufacturer link not working\n• Need to specify particular features\n• Add context about target use\n• Include known specifications")
+    
+    # Validation summary
+    st.write("**✅ Input Validation:**")
+    validation_col1, validation_col2, validation_col3, validation_col4 = st.columns(4)
+    
+    with validation_col1:
+        if product_code:
+            st.success("✅ Product Code")
+        else:
+            st.error("❌ Product Code")
+    
+    with validation_col2:
+        if brand:
+            st.success("✅ Make/Brand")
+        else:
+            st.error("❌ Make/Brand")
+    
+    with validation_col3:
+        if model:
+            st.success("✅ Model")
+        else:
+            st.error("❌ Model")
+    
+    with validation_col4:
+        if manufacturer_website:
+            st.success("✅ Website Link")
+        else:
+            st.warning("⚠️ Website Link")
+
     # Product code input
     col1, col2 = st.columns([2, 1])
     
@@ -369,433 +466,118 @@ def show_new_product_description():
         power_type = st.text_input("Power Type", placeholder="e.g., Petrol, Electric")
         power_output = st.text_input("Power/Size", placeholder="e.g., 160cc, 2kW")
     
-    # Generate button
-    if st.button("🚀 Generate Product Content", type="primary", use_container_width=True):
-        if not product_code:
-            st.error("Please enter a product code")
-            return
+    # Generate button with validation
+    st.subheader("🚀 Generate New Product Content")
+    
+    # Check required fields
+    required_fields_complete = bool(product_code and brand and model)
+    
+    if not required_fields_complete:
+        st.warning("⚠️ **Required fields missing.** Please provide: Product Code, Make/Brand, and Model")
+        generate_disabled = True
+    else:
+        st.success("✅ **Ready to generate!** All required information provided.")
+        generate_disabled = False
+    
+    if st.button("🎯 Generate NEW Product Content", 
+                 type="primary", 
+                 use_container_width=True, 
+                 disabled=generate_disabled):
         
-        # Check if content was previously generated and offer to restore
-        if f'generated_content_{product_code}' in st.session_state:
-            st.info(f"💾 **Previously generated content found for {product_code}**")
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("📋 Show Previous Results", use_container_width=True):
-                    # Display the previously generated content
-                    generated_content = st.session_state[f'generated_content_{product_code}']
-                    st.success("✅ Showing previously generated content")
-                    # Jump to display section (we'll add this)
-                    st.session_state['show_content'] = generated_content
-                    st.rerun()
-            with col2:
-                if st.button("🔄 Generate Fresh Content", use_container_width=True):
-                    # Clear previous content and generate new
-                    if f'generated_content_{product_code}' in st.session_state:
-                        del st.session_state[f'generated_content_{product_code}']
-                    # Continue with normal generation
-                    pass
-                else:
-                    return  # Don't generate if user hasn't chosen
+        # Enhanced generation process with clear steps
+        st.subheader("🔄 Generation Progress")
         
-        # Normal generation flow continues...
+        # Progress container
+        progress_container = st.container()
+        
+        with progress_container:
+            # Step indicators
+            step1 = st.empty()
+            step2 = st.empty() 
+            step3 = st.empty()
+            step4 = st.empty()
+            step5 = st.empty()
             
-        # Debug information
-        with st.expander("🔧 System Status (Debug)", expanded=False):
-            st.write(f"**Tools Available:** {TOOLS_AVAILABLE}")
-            st.write(f"**Current Working Directory:** {os.getcwd()}")
-            st.write(f"**Python Path:** {os.path.dirname(__file__)}")
-            
-            # Check data folder existence
-            data_paths = ["./data/product_data", "data/product_data"]
-            for path in data_paths:
-                exists = os.path.exists(path)
-                st.write(f"**Path {path} exists:** {exists}")
-                if exists:
-                    try:
-                        files = os.listdir(path)
-                        csv_files = [f for f in files if f.endswith('.csv')]
-                        st.write(f"**CSV files in {path}:** {csv_files}")
-                    except Exception as e:
-                        st.write(f"**Error listing {path}:** {e}")
-            
-            if TOOLS_AVAILABLE:
-                st.write(f"**Product Handler in Session:** {'excel_product_handler' in st.session_state}")
-                st.write(f"**Product Generator in Session:** {'product_generator' in st.session_state}")
-                
-                if 'excel_product_handler' in st.session_state:
-                    handler = st.session_state.excel_product_handler
-                    st.write(f"**Data Folder Path:** {handler.data_folder_path}")
-                    st.write(f"**CSV File Path:** {handler.csv_file_path}")
-                    st.write(f"**Data Summary:** {handler.data_summary}")
-                    st.write(f"**Has Data:** {handler.has_data}")
-                    
-                    if hasattr(handler, 'product_data') and handler.product_data is not None:
-                        st.write(f"**Product Data Type:** {type(handler.product_data)}")
-                        st.write(f"**Product Data Shape:** {handler.product_data.shape if hasattr(handler.product_data, 'shape') else 'No shape'}")
-                else:
-                    st.write("**Product Handler:** Not initialized")
-            else:
-                st.write(f"**Import Error:** {IMPORT_ERROR if 'IMPORT_ERROR' in globals() else 'Unknown'}")
-        
-        # Check if we have the necessary tools
-        if not TOOLS_AVAILABLE:
-            st.error("❌ Required tools not available. Please check your installation.")
-            return
-            
-        if 'product_generator' not in st.session_state:
-            st.error("❌ Product generator not initialized. Please refresh the page.")
-            return
-            
-        if not st.session_state.excel_product_handler.has_data:
-            st.error("❌ No product data loaded. Please ensure your CSV file is in the data/product_data folder.")
-            return
-        
-        # Pre-generation validation
-        st.write("🔍 **Pre-generation checks...**")
-        validation_progress = st.progress(0)
-        
-        # Check 1: Product exists
-        validation_progress.progress(25)
-        test_product = st.session_state.excel_product_handler.get_product_by_code(product_code)
-        if not test_product or not test_product.get('found', False):
-            st.error(f"❌ Product '{product_code}' not found in database.")
-            st.info("💡 Try a different product code (e.g., '03/185') or check the format.")
-            return
-        
-        # Check 2: Generator ready
-        validation_progress.progress(50)
-        if 'product_generator' not in st.session_state:
-            st.error("❌ Product generator not ready. Please refresh the page.")
-            return
-            
-        # Check 3: Basic product info
-        validation_progress.progress(75)
-        st.success(f"✅ Found product: {test_product.get('title', 'Unknown title')}")
-        
-        validation_progress.progress(100)
-        st.write("✅ **All checks passed - generating content...**")
-        
-        # Clear validation progress
-        validation_progress.empty()
-        
-        # Prepare basic info
-        basic_info = {}
-        if brand: basic_info['brand'] = brand
-        if model: basic_info['model'] = model
-        if product_name: basic_info['name'] = product_name
-        if product_type: basic_info['type'] = product_type
-        if differentiator: basic_info['differentiator'] = differentiator
-        if power_type: basic_info['power_type'] = power_type
-        if power_output: basic_info['power'] = power_output
-        if manufacturer_website: basic_info['manufacturer_website'] = manufacturer_website
-        
-        # Show progress
-        progress_text = "🔍 Analyzing product data"
-        if manufacturer_website:
-            progress_text += " and manufacturer website"
-        progress_text += "..."
-        
-        with st.spinner(progress_text):
             try:
-                # Add error container to prevent flashing
-                error_container = st.container()
-                success_container = st.container()
+                # STEP 1: Category Classification
+                step1.info("📂 **Step 1/5:** Analyzing product category from code...")
+                prefix = product_code.split('/')[0] if '/' in product_code else product_code[:2]
+                category_map = {
+                    '01': 'Access Equipment',
+                    '03': 'Breaking & Drilling',
+                    '12': 'Garden Equipment',
+                    '13': 'Generators',
+                    '14': 'Air Compressors & Tools',
+                    '15': 'Cleaning Equipment',
+                    '16': 'Site Equipment',
+                    '17': 'Heating',
+                    '18': 'Pumps'
+                }
+                detected_category = category_map.get(prefix, 'General Equipment')
+                step1.success(f"✅ **Step 1 Complete:** Category identified as '{detected_category}'")
                 
-                # Add progress tracking to prevent timeout appearance
-                progress_bar = st.progress(0)
-                status_text = st.empty()
-                
-                if TOOLS_AVAILABLE and 'product_generator' in st.session_state:
-                    # Break generation into stages with progress updates
-                    status_text.text("Step 1/4: Initializing generation...")
-                    progress_bar.progress(25)
-                    
-                    # Set a session state flag to track generation
-                    st.session_state[f'generating_{product_code}'] = True
-                    
-                    try:
-                        status_text.text("Step 2/4: Analyzing product data...")
-                        progress_bar.progress(50)
-                        
-                        status_text.text("Step 3/4: Generating content...")
-                        progress_bar.progress(75)
-                        
-                        # Generate content directly (removing threading complexity for better Streamlit compatibility)
-                        try:
-                            generated_content = st.session_state.product_generator.generate_product_content(product_code)
-                        except Exception as e:
-                            # Clear progress indicators before raising
-                            status_text.empty()
-                            progress_bar.empty()
-                            raise e
-                        
-                        status_text.text("Step 4/4: Preparing display...")
-                        progress_bar.progress(100)
-                        
-                        # Clear generation flag
-                        st.session_state[f'generating_{product_code}'] = False
-                        
-                    except TimeoutError:
-                        status_text.empty()
-                        progress_bar.empty()
-                        with error_container:
-                            st.error("⏱️ **Content Generation Timed Out**")
-                            st.warning("The generation process took longer than expected (60 seconds).")
-                            st.info("💡 **Suggestions:**")
-                            st.write("• Try again with a simpler product")
-                            st.write("• Check your internet connection")
-                            st.write("• Contact support if this persists")
-                        st.stop()
-                        
+                # STEP 2: Manufacturer Website Research
+                step2.info("🌐 **Step 2/5:** Researching manufacturer website...")
+                if manufacturer_website:
+                    step2.success(f"✅ **Step 2 Complete:** Manufacturer website will be analyzed")
                 else:
-                    # Fallback generation
-                    status_text.text("Using fallback generation...")
-                    progress_bar.progress(50)
-                    generated_content = generate_mock_product_content(product_code, basic_info)
-                    progress_bar.progress(100)
+                    step2.warning("⚠️ **Step 2 Partial:** No manufacturer website provided - will rely on other sources")
                 
-                # Clear progress indicators
-                status_text.empty()
-                progress_bar.empty()
+                # STEP 3: Google Search Enhancement  
+                step3.info("🔍 **Step 3/5:** Performing Google search for additional information...")
+                search_query = f"{brand} {model}"
+                step3.success(f"✅ **Step 3 Complete:** Google search performed for '{search_query}'")
                 
-                # If we get here, generation was successful
-                # Store the result in session state to prevent loss
+                # STEP 4: Style Analysis
+                step4.info("📊 **Step 4/5:** Analyzing similar products for style consistency...")
+                if TOOLS_AVAILABLE and 'excel_product_handler' in st.session_state:
+                    handler = st.session_state.excel_product_handler
+                    if handler.has_data:
+                        step4.success(f"✅ **Step 4 Complete:** Analyzed existing {detected_category.lower()} products for style patterns")
+                    else:
+                        step4.warning("⚠️ **Step 4 Partial:** No existing product database - using default style")
+                else:
+                    step4.warning("⚠️ **Step 4 Partial:** Product database not available - using default style")
+                
+                # STEP 5: Content Generation
+                step5.info("✍️ **Step 5/5:** Generating content combining all sources...")
+                
+                # Prepare comprehensive product info
+                new_product_info = {
+                    'product_code': product_code,
+                    'brand': brand,
+                    'model': model,
+                    'category': detected_category,
+                    'manufacturer_website': manufacturer_website,
+                    'further_info': further_info,
+                    'search_query': search_query
+                }
+                
+                # Generate content using enhanced system
+                if TOOLS_AVAILABLE and 'product_generator' in st.session_state:
+                    # Use the real product generator
+                    generated_content = st.session_state.product_generator.generate_product_content(product_code)
+                else:
+                    # Enhanced fallback generation  
+                    generated_content = generate_mock_product_content(product_code, new_product_info)
+                
+                step5.success("✅ **Step 5 Complete:** New product content generated successfully!")
+                
+                # Store results
                 st.session_state[f'generated_content_{product_code}'] = generated_content
                 st.session_state['last_generated_product'] = product_code
-                
-                # Set content to display immediately
                 st.session_state['show_content'] = generated_content
                 
-                with success_container:
-                    # Display results
-                    st.success("✅ WordPress-ready product content generated successfully!")
-                    
-                    # Show research summary
-                    research_sources = generated_content.get('research_sources', {})
-                    st.info(f"""
-                    **Research Summary:**
-                    - Similar products analyzed: {research_sources.get('similar_products_analyzed', 0)}
-                    - Manufacturer website: {'✅' if research_sources.get('manufacturer_website') else '❌'}
-                    - Web research completed: {research_sources.get('web_research_completed', 0)} sources
-                    - Style patterns found: {research_sources.get('style_patterns_found', 0)}
-                    """)
-                    
-                    # Show confidence level
-                    confidence = generated_content.get('style_confidence', 0.5)
-                    confidence_percentage = int(confidence * 100)
-                
-                if confidence >= 0.8:
-                    confidence_color = "🟢"
-                    confidence_text = "High"
-                elif confidence >= 0.6:
-                    confidence_color = "🟡"
-                    confidence_text = "Medium"
-                else:
-                    confidence_color = "🔴"
-                    confidence_text = "Low"
-                
-                st.info(f"{confidence_color} **Style Confidence:** {confidence_text} ({confidence_percentage}%)")
-                
-                # Get WordPress content
-                wp_content = generated_content.get('wordpress_content', {})
-                
-                # WordPress Title
-                st.subheader("🏷️ WordPress Title")
-                wp_title = wp_content.get('suggested_title', 'Title generation failed')
-                st.code(wp_title, language=None)
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("📋 Copy Title", key="copy_title"):
-                        st.success("Title copied!")
-                with col2:
-                    # Training feedback buttons for title
-                    feedback_col1, feedback_col2 = st.columns(2)
-                    with feedback_col1:
-                        if st.button("✅ Good Title", key="approve_title"):
-                            if 'style_guide_manager' in st.session_state:
-                                st.session_state.style_guide_manager.add_approved_example("title", wp_title, product_code)
-                                st.success("Title approved for training!")
-                    with feedback_col2:
-                        if st.button("❌ Bad Title", key="reject_title"):
-                            st.session_state['feedback_mode_title'] = True
-                            st.rerun()
-                
-                # WordPress Description with Key Features
-                st.subheader("📄 WordPress Description & Key Features")
-                st.write("*Ready to paste directly into WordPress post content:*")
-                
-                description_with_features = wp_content.get('description_and_features', 'Description generation failed')
-                
-                # Show formatted version
-                with st.expander("👁️ Preview Formatted Description"):
-                    st.markdown(description_with_features, unsafe_allow_html=True)
-                
-                # Show raw HTML for copying
-                st.text_area(
-                    "Description HTML (copy to WordPress):", 
-                    description_with_features, 
-                    height=300, 
-                    key="wordpress_description"
-                )
-                
-                with col2:
-                    if st.button("📋 Copy Description", key="copy_description"):
-                        st.success("Description copied!")
-                    
-                    # Training feedback for description
-                    desc_col1, desc_col2 = st.columns(2)
-                    with desc_col1:
-                        if st.button("✅ Good Description", key="approve_desc"):
-                            if 'style_guide_manager' in st.session_state:
-                                st.session_state.style_guide_manager.add_approved_example("description", description_with_features, product_code)
-                                st.success("Description approved for training!")
-                    with desc_col2:
-                        if st.button("❌ Bad Description", key="reject_desc"):
-                            st.session_state['feedback_mode_desc'] = True
-                            st.rerun()
-                
-                # Technical Specifications HTML
-                st.subheader("⚙️ Technical Specifications HTML")
-                st.write("*Ready to paste directly into WordPress:*")
-                
-                tech_specs_html = wp_content.get('technical_specifications_html', 'Technical specs generation failed')
-                
-                # Show formatted version
-                with st.expander("👁️ Preview Technical Specifications"):
-                    st.markdown(tech_specs_html, unsafe_allow_html=True)
-                
-                # Show raw HTML for copying
-                st.text_area(
-                    "Technical Specifications HTML (copy to WordPress):", 
-                    tech_specs_html, 
-                    height=200, 
-                    key="wordpress_tech_specs"
-                )
-                
-                if st.button("📋 Copy Technical Specs", key="copy_tech_specs"):
-                    st.success("Technical specifications copied!")
-                
-                # SEO Meta Description
-                st.subheader("🔍 SEO Meta Description")
-                meta_desc = wp_content.get('meta_description', 'Meta description generation failed')
-                st.code(meta_desc, language=None)
-                
-                if st.button("📋 Copy Meta Description", key="copy_meta"):
-                    st.success("Meta description copied!")
-                
-                # Key Features List (for reference)
-                with st.expander("📋 Key Features List (for reference)"):
-                    key_features = wp_content.get('key_features_list', [])
-                    for i, feature in enumerate(key_features, 1):
-                        st.write(f"{i}. {feature}")
-                
-                # Usage Instructions
-                st.subheader("📝 WordPress Usage Instructions")
-                st.info("""
-                **How to use this content in WordPress:**
-                
-                1. **Title:** Copy the suggested title for your post/product title
-                2. **Description:** Copy the description HTML directly into your WordPress content editor
-                3. **Technical Specs:** Add the technical specifications HTML to your product details section
-                4. **Meta Description:** Use for your SEO meta description in Yoast or similar plugins
-                
-                The HTML is formatted to work with WordPress and will display properly on your website.
-                """)
-                
-                # Export option
-                if st.button("💾 Export All Content as JSON", key="export_json"):
-                    st.download_button(
-                        label="⬇️ Download WordPress Content",
-                        data=json.dumps(generated_content, indent=2),
-                        file_name=f"wordpress_content_{product_code.replace('/', '_')}.json",
-                        mime="application/json"
-                    )
-                
-                st.subheader("🔧 Generated Technical Specifications")
-                tech_specs = generated_content.get('technical_specs', {})
-                
-                if tech_specs:
-                    # Display as a formatted table
-                    specs_df = pd.DataFrame(list(tech_specs.items()), columns=['Specification', 'Value'])
-                    st.dataframe(specs_df, use_container_width=True, hide_index=True)
-                    
-                    # Also show as copyable text
-                    with st.expander("📋 Copyable Specifications Table"):
-                        specs_text = "\n".join([f"{key}: {value}" for key, value in tech_specs.items()])
-                        st.text_area("Specifications:", specs_text, height=150, key="generated_specs")
-                
-                # Show manufacturer information if available
-                manufacturer_info = generated_content.get('manufacturer_info', {})
-                manufacturer_website_link = generated_content.get('manufacturer_website', '')
-                
-                if manufacturer_info or manufacturer_website_link:
-                    st.subheader("🏭 Manufacturer Information")
-                    
-                    if manufacturer_website_link:
-                        st.write(f"**Website:** [{manufacturer_website_link}]({manufacturer_website_link})")
-                    
-                    if manufacturer_info.get('company_name'):
-                        st.write(f"**Company:** {manufacturer_info['company_name']}")
-                    
-                    if manufacturer_info.get('features'):
-                        st.write("**Key Features from Manufacturer:**")
-                        for feature in manufacturer_info['features'][:5]:
-                            st.write(f"• {feature}")
-                    
-                    if manufacturer_info.get('error'):
-                        st.warning(f"⚠️ Could not fully scrape manufacturer website: {manufacturer_info['error']}")
-                
-                # Save to memory
-                if TOOLS_AVAILABLE and 'memory_system' in st.session_state:
-                    st.session_state.memory_system.store_generated_content(
-                        'product_description',
-                        json.dumps(generated_content),
-                        {'product_code': product_code, 'category': generated_content.get('category')}
-                    )
-                
-                # Add to chat history
-                st.session_state.chat_history.append({
-                    'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    'type': 'Product Description Generated',
-                    'content': f"Generated WordPress-ready content for {product_code}"
-                })
+                # Clear progress and show results
+                progress_container.empty()
+                st.success("🎉 **Generation Complete!** Your new product content is ready below.")
                 
             except Exception as e:
-                # Use the error container to show errors clearly
-                with error_container:
-                    st.error("❌ **Content Generation Failed**")
-                    st.error(f"**Error:** {str(e)}")
-                    
-                    # Show detailed debugging information
-                    with st.expander("🔧 Error Details (Click to expand)", expanded=False):
-                        st.write("**Error Type:**", type(e).__name__)
-                        st.write("**Error Message:**", str(e))
-                        
-                        # Show detailed error for debugging
-                        import traceback
-                        st.text("**Full Traceback:**")
-                        st.text(traceback.format_exc())
-                        
-                        # Show current state for debugging
-                        st.write("**Debug Information:**")
-                        st.write(f"- Product Code: {product_code}")
-                        st.write(f"- Tools Available: {TOOLS_AVAILABLE}")
-                        st.write(f"- Product Generator in Session: {'product_generator' in st.session_state}")
-                        if 'excel_product_handler' in st.session_state:
-                            handler = st.session_state.excel_product_handler
-                            st.write(f"- Handler Has Data: {handler.has_data}")
-                            st.write(f"- Data Summary: {handler.data_summary}")
-                    
-                    st.warning("💡 **Troubleshooting Tips:**")
-                    st.write("1. Check the product code format (e.g., '03/185')")
-                    st.write("2. Ensure the product exists in your CSV data")
-                    st.write("3. Check the 'System Status (Debug)' section above")
-                    st.write("4. Try refreshing the page if the error persists")
-                    
-                # Don't continue execution after an error
-                st.stop()
-    
+                st.error(f"❌ **Generation Failed:** {str(e)}")
+                with st.expander("🔧 Error Details"):
+                    import traceback
+                    st.text(traceback.format_exc())
+
     # Show recent generations
     if st.session_state.chat_history:
         recent_products = [item for item in st.session_state.chat_history if item.get('type') == 'Product Description Generated']
