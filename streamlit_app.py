@@ -542,8 +542,8 @@ def show_new_product_description():
                 
                 # Generate content using enhanced system
                 if TOOLS_AVAILABLE and 'product_generator' in st.session_state:
-                    # Use the real product generator
-                    generated_content = st.session_state.product_generator.generate_product_content(product_code)
+                    # Use the real product generator with NEW product info
+                    generated_content = st.session_state.product_generator.generate_product_content(product_code, new_product_info)
                 else:
                     # Enhanced fallback generation  
                     # Debug: Show what info is being passed
