@@ -433,37 +433,19 @@ def show_new_product_description():
         else:
             st.warning("⚠️ Website Link")
 
-    # Product code input
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        product_code = st.text_input(
-            "Product Code", 
-            placeholder="e.g., 01/ABC123, 03/XYZ789",
-            help="Enter the product code. The prefix (01/, 03/, etc.) determines the category."
-        )
-    
-    with col2:
-        st.info("**Code Prefixes:**\n01/ = Access\n03/ = Breaking & Drilling\n12/ = Garden\n13/ = Generators")
-    
-    # Optional basic information
-    st.subheader("📋 Optional Product Information")
-    st.write("*Provide any known details to improve generation quality*")
-    
+    # Additional optional information
+    st.write("**� Additional Product Details:**")
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        brand = st.text_input("Brand", placeholder="e.g., Honda, Stihl")
-        model = st.text_input("Model", placeholder="e.g., HR194, MS250")
         product_name = st.text_input("Product Name", placeholder="e.g., Rotary Lawnmower")
+        product_type = st.text_input("Type", placeholder="e.g., Lawnmower, Chainsaw")
     
     with col2:
-        product_type = st.text_input("Type", placeholder="e.g., Lawnmower, Chainsaw")
         differentiator = st.text_input("Differentiator", placeholder="e.g., Self Propelled, Professional")
-        manufacturer_website = st.text_input("Manufacturer Website", placeholder="e.g., https://www.honda.co.uk")
+        power_type = st.text_input("Power Type", placeholder="e.g., Petrol, Electric")
     
     with col3:
-        power_type = st.text_input("Power Type", placeholder="e.g., Petrol, Electric")
         power_output = st.text_input("Power/Size", placeholder="e.g., 160cc, 2kW")
     
     # Generate button with validation
