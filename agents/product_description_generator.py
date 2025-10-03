@@ -1042,15 +1042,15 @@ Perfect for electrical installations, plumbing work, HVAC installations, and gen
                 ]
                 
                 tech_specs = {
-                    'Brand': brand,
-                    'Model': model,
-                    'Category': category,
-                    'Drilling Capacity': 'Concrete: 40mm, Steel: 13mm',
-                    'Impact Rate': '4,800 bpm',
-                    'Chuck Type': 'SDS-Plus Compatible',
-                    'Battery': 'High-capacity Lithium-ion',
-                    'Vibration Control': 'Advanced Anti-Vibration',
-                    'Applications': 'Drilling, Hammer Drilling, Chiselling'
+                    'Type': f'{brand} {model}',
+                    'Power Source': power_type if power_type else '110V/240V Available',
+                    'Impact Rate': '1800-4500 bpm',
+                    'Impact Energy': '20-35 J',
+                    'Vibration Level': '4.5-8.0 m/s²',
+                    'Noise Level': '75-85 dB(A)',
+                    'Weight': '12-16 kg',
+                    'Chuck Type': 'SDS-Plus/SDS-Max Compatible',
+                    'Applications': 'Heavy Demolition, Floor Breaking, Foundation Work'
                 }
             else:
                 description = f"""Professional {category.lower()} equipment designed for demanding construction and renovation applications. The {brand} {model} delivers reliable performance for concrete drilling, masonry work, and demolition tasks.
@@ -1071,14 +1071,15 @@ Ideal for construction professionals, maintenance teams, and DIY enthusiasts tac
                 ]
                 
                 tech_specs = {
-                    'Brand': brand,
-                    'Model': model,
-                    'Category': category,
-                    'Applications': 'Breaking & Drilling',
-                    'Power Source': power_type if power_type else 'Electric/Cordless',
-                    'Chuck Type': 'Professional Grade',
-                    'Vibration Control': 'Enhanced',
-                    'Suitable For': 'Concrete, Masonry, Steel'
+                    'Type': f'{brand} {model}',
+                    'Power Source': power_type if power_type else '110V Available',
+                    'Impact Rate': '1500-3000 bpm',
+                    'Impact Energy': '15-25 J',
+                    'Vibration Level': '5.0-9.0 m/s²',
+                    'Noise Level': '70-80 dB(A)',
+                    'Weight': '8-12 kg',
+                    'Chuck Type': 'SDS-Plus Compatible',
+                    'Applications': 'Breaking & Drilling, General Construction'
                 }
         
         elif category == 'Garden Equipment':

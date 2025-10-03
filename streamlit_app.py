@@ -893,9 +893,13 @@ Suitable for construction, maintenance, and specialized applications requiring p
     # Add category-specific specs
     if category == 'Breaking & Drilling':
         tech_specs.update({
-            'Drilling Capacity': 'Concrete: 40mm, Steel: 13mm',
-            'Impact Rate': 'High Performance',
-            'Vibration Control': 'Advanced Anti-Vibration',
+            'Type': f'{brand} {model}',
+            'Power Source': power_type if power_type else '110V Available',
+            'Impact Rate': '1800-3000 bpm',
+            'Impact Energy': '20-35 J',
+            'Vibration Level': '5.0-8.0 m/s²',
+            'Noise Level': '75-85 dB(A)',
+            'Weight': f'{tech_specs.get("Power Output", "12-15")} kg',
             'Chuck Type': 'SDS-Plus/SDS-Max Compatible'
         })
     elif category == 'Garden Equipment':
