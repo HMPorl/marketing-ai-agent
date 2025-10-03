@@ -548,7 +548,6 @@ def show_new_product_description():
                 # Store results
                 st.session_state[f'generated_content_{product_code}'] = generated_content
                 st.session_state['last_generated_product'] = product_code
-                st.session_state['show_content'] = generated_content
                 
                 # Add to chat history
                 from datetime import datetime
@@ -558,12 +557,53 @@ def show_new_product_description():
                     'content': f"Generated content for NEW product {product_code} ({brand} {model})"
                 })
                 
-                # Clear progress and show results
+                # Clear progress and show results IMMEDIATELY
                 progress_container.empty()
-                st.success("🎉 **Generation Complete!** Your new product content is ready below.")
+                st.success("🎉 **Generation Complete!** Here's your content:")
                 
-                # Refresh page to show the generated content
-                st.rerun()
+                # ===== IMMEDIATE CONTENT DISPLAY =====
+                st.subheader("📝 Generated Content")
+                
+                # Show raw content for debugging/review
+                content_text = f"""PRODUCT: {product_code} - {brand} {model}
+CATEGORY: {generated_content.get('category', 'Unknown')}
+
+TITLE:
+{generated_content.get('wordpress_content', {}).get('suggested_title', 'No title generated')}
+
+DESCRIPTION:
+{generated_content.get('wordpress_content', {}).get('description_and_features', 'No description generated')}
+
+TECHNICAL SPECS:
+{str(generated_content.get('technical_specs', 'No specs generated'))}
+
+META DESCRIPTION:
+{generated_content.get('wordpress_content', {}).get('meta_description', 'No meta description generated')}
+
+---
+DEBUG INFO:
+Generated at: {generated_content.get('generated_at', 'Unknown')}
+Confidence: {generated_content.get('style_confidence', 0)}
+"""
+                
+                # Display in text area for easy review and copying
+                st.text_area(
+                    "Generated Content (Click in box and Ctrl+A to select all):",
+                    content_text,
+                    height=400,
+                    key=f"content_display_{product_code}"
+                )
+                
+                # Simple copy button
+                if st.button("📋 Copy All Content", key=f"copy_all_{product_code}"):
+                    st.success("Content ready to copy! Click in the text area above and press Ctrl+A then Ctrl+C")
+                
+                # Show raw data for debugging
+                with st.expander("🔧 Raw Generated Data (for debugging)"):
+                    st.json(generated_content)
+                
+                # Don't rerun - show content inline instead
+                # st.rerun()
                 
             except Exception as e:
                 st.error(f"❌ **Generation Failed:** {str(e)}")
