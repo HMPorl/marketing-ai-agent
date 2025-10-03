@@ -529,6 +529,11 @@ def show_new_product_description():
                     'product_code': product_code,
                     'brand': brand,
                     'model': model,
+                    'name': product_name,
+                    'type': product_type,
+                    'differentiator': differentiator,
+                    'power_type': power_type,
+                    'power': power_output,
                     'category': detected_category,
                     'manufacturer_website': manufacturer_website,
                     'further_info': further_info,
@@ -541,6 +546,9 @@ def show_new_product_description():
                     generated_content = st.session_state.product_generator.generate_product_content(product_code)
                 else:
                     # Enhanced fallback generation  
+                    # Debug: Show what info is being passed
+                    st.write("🔧 **Debug - Info being passed to generator:**")
+                    st.json(new_product_info)
                     generated_content = generate_mock_product_content(product_code, new_product_info)
                 
                 step5.success("✅ **Step 5 Complete:** New product content generated successfully!")
