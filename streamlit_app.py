@@ -579,44 +579,201 @@ def show_new_product_description():
                 progress_container.empty()
                 st.success("🎉 **Generation Complete!** Here's your content:")
                 
-                # ===== IMMEDIATE CONTENT DISPLAY =====
-                st.subheader("📝 Generated Content")
+                # ===== PROFESSIONAL CONTENT DISPLAY =====
+                st.subheader("📝 WordPress-Ready Content")
                 
-                # Show raw content for debugging/review
-                content_text = f"""PRODUCT: {product_code} - {brand} {model}
+                # Product Header
+                st.markdown("---")
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    st.markdown(f"**Product:** {product_code}")
+                    st.markdown(f"**Brand:** {brand}")
+                    st.markdown(f"**Model:** {model}")
+                with col2:
+                    st.markdown(f"**Category:** {generated_content.get('category', 'Unknown')}")
+                    confidence = generated_content.get('style_confidence', 0)
+                    confidence_color = "🟢" if confidence >= 0.8 else "🟡" if confidence >= 0.6 else "🔴"
+                    st.markdown(f"**Confidence:** {confidence_color} {int(confidence * 100)}%")
+                
+                st.markdown("---")
+                
+                # WordPress Title Section
+                st.subheader("🏷️ WordPress Title")
+                title = generated_content.get('wordpress_content', {}).get('suggested_title', 'No title generated')
+                st.markdown(f"**{title}**")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("📋 Copy Title", key="copy_title"):
+                        st.success("Title copied to clipboard!")
+                with col2:
+                    st.text_area("Title (for copying):", title, height=60, key="title_copy", label_visibility="collapsed")
+                
+                st.markdown("---")
+                
+                # Description Section
+                st.subheader("📄 WordPress Description")
+                description_html = generated_content.get('wordpress_content', {}).get('description_and_features', 'No description generated')
+                
+                # Show formatted preview
+                st.markdown("**Preview:**")
+                st.markdown(description_html, unsafe_allow_html=True)
+                
+                # Raw HTML for copying
+                st.markdown("**HTML for WordPress (copy this):**")
+                st.text_area(
+                    "Description HTML:",
+                    description_html,
+                    height=200,
+                    key="description_html",
+                    help="Copy this HTML directly into your WordPress post content"
+                )
+                
+                st.markdown("---")
+                
+                # Technical Specifications - IMPROVED READABLE FORMAT
+                st.subheader("⚙️ Technical Specifications")
+                tech_specs = generated_content.get('technical_specs', {})
+                
+                if tech_specs:
+                    # Display as a nice formatted table
+                    st.markdown("**Specifications Overview:**")
+                    
+                    # Create a clean dataframe for display
+                    import pandas as pd
+                    specs_data = []
+                    for key, value in tech_specs.items():
+                        specs_data.append({"Specification": key, "Details": value})
+                    
+                    specs_df = pd.DataFrame(specs_data)
+                    
+                    # Display with nice formatting
+                    st.dataframe(
+                        specs_df,
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "Specification": st.column_config.TextColumn("Specification", width="medium"),
+                            "Details": st.column_config.TextColumn("Details", width="large")
+                        }
+                    )
+                    
+                    # Also provide HTML table for WordPress
+                    st.markdown("**HTML Table for WordPress:**")
+                    tech_specs_html = generated_content.get('wordpress_content', {}).get('technical_specifications_html', '')
+                    st.text_area(
+                        "Technical Specs HTML:",
+                        tech_specs_html,
+                        height=150,
+                        key="tech_specs_html",
+                        help="Copy this HTML table into your WordPress post"
+                    )
+                else:
+                    st.info("No technical specifications generated")
+                
+                st.markdown("---")
+                
+                # SEO Meta Description
+                st.subheader("🔍 SEO Meta Description")
+                meta_desc = generated_content.get('wordpress_content', {}).get('meta_description', 'No meta description generated')
+                st.markdown(f"*{meta_desc}*")
+                st.text_area("Meta Description (for copying):", meta_desc, height=60, key="meta_copy")
+                
+                st.markdown("---")
+                
+                # Key Features List
+                st.subheader("📋 Key Features")
+                key_features = generated_content.get('wordpress_content', {}).get('key_features_list', [])
+                if key_features:
+                    for i, feature in enumerate(key_features, 1):
+                        st.markdown(f"**{i}.** {feature}")
+                else:
+                    st.info("No key features generated")
+                
+                st.markdown("---")
+                
+                # Research Sources Summary
+                st.subheader("📊 Research Summary")
+                research = generated_content.get('research_sources', {})
+                
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Similar Products", research.get('similar_products_analyzed', 0))
+                with col2:
+                    st.metric("Web Research", research.get('web_research_completed', 0))
+                with col3:
+                    st.metric("Style Patterns", research.get('style_patterns_found', 0))
+                with col4:
+                    website_status = "✅ Yes" if research.get('manufacturer_website') else "❌ No"
+                    st.metric("Manufacturer Site", website_status)
+                
+                st.markdown("---")
+                
+                # Export Options
+                st.subheader("💾 Export Options")
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    if st.button("📄 Export as Text", key="export_text"):
+                        export_text = f"""PRODUCT: {product_code} - {brand} {model}
 CATEGORY: {generated_content.get('category', 'Unknown')}
 
 TITLE:
-{generated_content.get('wordpress_content', {}).get('suggested_title', 'No title generated')}
+{title}
 
 DESCRIPTION:
-{generated_content.get('wordpress_content', {}).get('description_and_features', 'No description generated')}
+{description_html}
 
-TECHNICAL SPECS:
-{str(generated_content.get('technical_specs', 'No specs generated'))}
+TECHNICAL SPECIFICATIONS:
+{chr(10).join([f'{k}: {v}' for k, v in tech_specs.items()])}
 
 META DESCRIPTION:
-{generated_content.get('wordpress_content', {}).get('meta_description', 'No meta description generated')}
+{meta_desc}
 
----
-DEBUG INFO:
-Generated at: {generated_content.get('generated_at', 'Unknown')}
-Confidence: {generated_content.get('style_confidence', 0)}
+KEY FEATURES:
+{chr(10).join([f'• {feature}' for feature in key_features])}
 """
+                        st.download_button(
+                            "⬇️ Download Text File",
+                            export_text,
+                            file_name=f"{product_code.replace('/', '_')}_content.txt",
+                            mime="text/plain"
+                        )
                 
-                # Display in text area for easy review and copying
-                st.text_area(
-                    "Generated Content (Click in box and Ctrl+A to select all):",
-                    content_text,
-                    height=400,
-                    key=f"content_display_{product_code}"
-                )
+                with col2:
+                    if st.button("📊 Export as JSON", key="export_json"):
+                        import json
+                        st.download_button(
+                            "⬇️ Download JSON File",
+                            json.dumps(generated_content, indent=2),
+                            file_name=f"{product_code.replace('/', '_')}_content.json",
+                            mime="application/json"
+                        )
                 
-                # Simple copy button
-                if st.button("📋 Copy All Content", key=f"copy_all_{product_code}"):
-                    st.success("Content ready to copy! Click in the text area above and press Ctrl+A then Ctrl+C")
+                with col3:
+                    if st.button("📋 Copy All to Clipboard", key="copy_all"):
+                        st.success("Content ready! Use the individual copy buttons above for specific sections.")
                 
-                # Show raw data for debugging
+                st.markdown("---")
+                
+                # Usage Instructions
+                with st.expander("📖 WordPress Usage Instructions"):
+                    st.markdown("""
+                    **How to use this content in WordPress:**
+                    
+                    1. **Title**: Copy the WordPress title for your post/product title
+                    2. **Description**: Copy the description HTML directly into your WordPress content editor (Text/HTML mode)
+                    3. **Technical Specs**: Add the technical specifications HTML to your product details section
+                    4. **Meta Description**: Use for your SEO meta description in Yoast or similar plugins
+                    5. **Key Features**: Reference when creating bullet points or feature lists
+                    
+                    **Tips:**
+                    - Switch to Text/HTML mode in WordPress editor when pasting HTML
+                    - Preview the content before publishing
+                    - Adjust styling as needed to match your theme
+                    """)
+                
+                # Show raw data for debugging (collapsible)
                 with st.expander("🔧 Raw Generated Data (for debugging)"):
                     st.json(generated_content)
                 
