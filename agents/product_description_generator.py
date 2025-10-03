@@ -36,6 +36,13 @@ class ProductDescriptionGenerator:
         else:
             self.style_guide_manager = None
         
+    def generate_new_product_content(self, product_code: str, new_product_info: Dict) -> Dict:
+        """
+        Generate content for NEW products using provided information
+        Public method for NEW product generation
+        """
+        return self._generate_new_product_content(product_code, new_product_info)
+    
     def generate_product_content(self, product_code: str, new_product_info: Dict = None) -> Dict:
         """
         Generate comprehensive WordPress-ready product content with web research

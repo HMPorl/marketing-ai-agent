@@ -543,7 +543,17 @@ def show_new_product_description():
                 # Generate content using enhanced system
                 if TOOLS_AVAILABLE and 'product_generator' in st.session_state:
                     # Use the real product generator with NEW product info
-                    generated_content = st.session_state.product_generator.generate_product_content(product_code, new_product_info)
+                    try:
+                        # Try the dedicated NEW product method first
+                        if hasattr(st.session_state.product_generator, 'generate_new_product_content'):
+                            generated_content = st.session_state.product_generator.generate_new_product_content(product_code, new_product_info)
+                        else:
+                            # Try the enhanced signature
+                            generated_content = st.session_state.product_generator.generate_product_content(product_code, new_product_info)
+                    except (TypeError, AttributeError):
+                        # Fallback to old signature and mock content
+                        st.warning("⚠️ Using legacy product generator - enhanced content will be generated with mock system...")
+                        generated_content = generate_mock_product_content(product_code, new_product_info)
                 else:
                     # Enhanced fallback generation  
                     # Debug: Show what info is being passed
